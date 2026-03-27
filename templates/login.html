@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Icy Barber - Login{% endblock %}
+
+{% block extra_css %}
+<style>
+.login-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background:
+        radial-gradient(circle at 15% 20%, rgba(201, 168, 76, 0.22) 0%, transparent 38%),
+        radial-gradient(circle at 85% 15%, rgba(120, 90, 26, 0.28) 0%, transparent 30%),
+        linear-gradient(160deg, #181a1f 0%, #111317 52%, #0f1014 100%);
+}
+
+.login-card {
+    width: min(420px, calc(100vw - 2rem));
+    background: rgba(28, 30, 36, 0.92);
+    border-radius: 18px;
+    box-shadow: 0 20px 55px rgba(0, 0, 0, 0.35);
+    padding: 1.5rem 1.5rem 1.2rem;
+    border: 1px solid rgba(201, 168, 76, 0.2);
+    color: #e7e9ef;
+}
+
+.login-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.login-header img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+}
+
+.login-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0;
+    color: #f3f4f8;
+}
+
+.login-subtitle {
+    margin: 0.2rem 0 0;
+    color: #b6bdd0;
+    font-size: 0.9rem;
+}
+
+.login-form {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.login-form label {
+    font-size: 0.88rem;
+    color: #cfd5e3;
+    font-weight: 600;
+}
+
+.login-form input {
+    width: 100%;
+    border: 1px solid rgba(201, 168, 76, 0.32);
+    background: rgba(16, 18, 23, 0.8);
+    color: #f5f6fa;
+    border-radius: 10px;
+    padding: 0.7rem 0.8rem;
+    font-size: 0.95rem;
+}
+
+.login-password-wrap {
+    position: relative;
+}
+
+.login-password-wrap input {
+    padding-right: 2.5rem;
+}
+
+.login-password-toggle {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: #c6cfdf;
+    cursor: pointer;
+    padding: 0.2rem;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-password-toggle svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+}
+
+.login-remember {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: #cfd5e3;
+    font-size: 0.86rem;
+}
+
+.login-remember input {
+    width: auto;
+    accent-color: #c9a84c;
+}
+
+.login-form button:not(.login-password-toggle) {
+    margin-top: 0.4rem;
+    border: none;
+    border-radius: 10px;
+    padding: 0.75rem;
+    font-weight: 700;
+    background: #c9a84c;
+    color: #111319;
+    cursor: pointer;
+}
+
+.login-form button:not(.login-password-toggle):hover {
+    background: #d6b357;
+}
+
+.login-hint {
+    margin-top: 1rem;
+    padding: 0.7rem;
+    background: rgba(17, 19, 24, 0.7);
+    border: 1px solid rgba(201, 168, 76, 0.25);
+    border-radius: 10px;
+    color: #c9ceda;
+    font-size: 0.85rem;
+}
+
+.flash {
+    margin-bottom: 0.7rem;
+    padding: 0.65rem 0.8rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+}
+
+.flash--success {
+    background: #e8f9ed;
+    border: 1px solid #b5ebc3;
+    color: #145c2d;
+}
+
+.flash--error {
+    background: rgba(125, 21, 21, 0.22);
+    border: 1px solid rgba(233, 124, 124, 0.35);
+    color: #ffd6d6;
+}
+</style>
+{% endblock %}
+
+{% block body_class %}login-page{% endblock %}
+{% block show_footer %}false{% endblock %}
+
+{% block content %}
+<section class="login-card">
+    <header class="login-header">
+        <img src="{{ url_for('static', filename='img/logo_icy.jpeg') }}" alt="Icy Barber Logo">
+        <div>
+            <h1 class="login-title">Acceso interno</h1>
+            <p class="login-subtitle">Admin o barbero</p>
+        </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            {% if category == 'error' %}
+            <div class="flash flash--{{ category }}">{{ message }}</div>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <form method="post" class="login-form">
+        <div>
+            <label for="username">Usuario</label>
+            <input id="username" name="username" type="text" required autocomplete="username">
+        </div>
+        <div>
+            <label for="password">Contraseña</label>
+            <div class="login-password-wrap">
+                <input id="password" name="password" type="password" required autocomplete="current-password">
+                <button class="login-password-toggle" id="password-toggle" type="button" title="Mostrar/ocultar contraseña">
+                    <svg class="password-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg class="password-eye-slash" style="display:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+            </div>
+        </div>
+        <label class="login-remember" for="keep_session">
+            <input id="keep_session" name="keep_session" type="checkbox">
+            Mantener sesión activa
+        </label>
+        <button type="submit">Entrar</button>
+    </form>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const passInput = document.getElementById('password');
+    const toggle = document.getElementById('password-toggle');
+    if (!passInput || !toggle) return;
+
+    toggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        const isPassword = passInput.type === 'password';
+        passInput.type = isPassword ? 'text' : 'password';
+        
+        const eye = toggle.querySelector('.password-eye');
+        const eyeSlash = toggle.querySelector('.password-eye-slash');
+        if (eye) eye.style.display = isPassword ? 'none' : 'block';
+        if (eyeSlash) eyeSlash.style.display = isPassword ? 'block' : 'none';
+    });
+});
+</script>
+{% endblock %}

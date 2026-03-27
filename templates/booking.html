@@ -1,0 +1,950 @@
+{% extends "base.html" %}
+
+{% block title %}Icy Barber - Reserva tu cita{% endblock %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/booking.css') }}">
+{% endblock %}
+
+{% block body_class %}booking-page{% endblock %}
+
+{% block content %}
+{% set shop = barbershop_info | default({
+    'name': 'Icy Barber',
+    'category': 'Barberia',
+    'address': 'C. Barranca Seca 1, Barrio de Xochicalco, 90740 Zacatelco, Tlax. Puebla (Puebla), Mexico',
+    'maps_url': 'https://maps.google.com',
+    'today_hours': '09:00 - 20:00',
+    'portfolio_image': 'img/logo_icy.jpeg',
+    'schedule': [
+        {'day': 'Lunes', 'open': '08:40', 'close': '20:00', 'is_today': false},
+        {'day': 'Martes', 'open': '09:00', 'close': '20:00', 'is_today': false},
+        {'day': 'Miercoles', 'open': '09:00', 'close': '20:00', 'is_today': true},
+        {'day': 'Jueves', 'open': '08:40', 'close': '20:00', 'is_today': false},
+        {'day': 'Viernes', 'open': '08:40', 'close': '20:00', 'is_today': false},
+        {'day': 'Sabado', 'open': '09:00', 'close': '20:00', 'is_today': false},
+        {'day': 'Domingo', 'open': '10:00', 'close': '20:30', 'is_today': false}
+    ]
+}) %}
+<nav class="booking-navbar" id="booking-navbar">
+    <a class="booking-navbar__brand" href="{{ url_for('login') }}" aria-label="Ir a login">
+        <img src="{{ url_for('static', filename='img/logo_icy.jpeg') }}" alt="Icy Barber Logo" class="booking-navbar__logo">
+        <span class="booking-navbar__name">Icy Barber</span>
+    </a>
+    <div class="booking-navbar__links">
+        <a href="#booking-info" class="booking-navbar__link booking-navbar__link--active" data-section="info">Info</a>
+        <a href="#booking-services" class="booking-navbar__link booking-navbar__link--active" data-section="services">Servicios</a>
+        {% if productos %}
+        <a href="#booking-products" class="booking-navbar__link" data-section="products">Productos</a>
+        {% endif %}
+    </div>
+    <span class="booking-navbar__helper">Reserva 24/7</span>
+</nav>
+
+<section class="booking-hero" id="booking-hero">
+    <img src="{{ url_for('static', filename='img/hero.png') }}" alt="Icy Barber" class="booking-hero__img">
+    <div class="booking-hero__overlay"></div>
+    <div class="booking-hero__content">
+        <span class="booking-hero__badge">{{ shop.category }}</span>
+        <h1>{{ shop.name }}</h1>
+        <div class="booking-hero__meta">
+            <span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.5a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z"/><path d="M12 21s7.5-4.35 7.5-11.25a7.5 7.5 0 1 0-15 0C4.5 16.65 12 21 12 21Z"/></svg>
+                {{ shop.address }}
+            </span>
+            <span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v6l4 2"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                Abierto hoy {{ shop.today_hours }}
+            </span>
+        </div>
+    </div>
+</section>
+
+<main class="booking-content" id="booking-content">
+    <div class="booking-main-grid">
+        <section class="booking-services" id="booking-services">
+            <p class="booking-services__category">Selecciona servicios</p>
+            <div class="booking-services__grid">
+                {% for servicio in servicios %}
+                <article class="service-card" style="--card-index: {{ loop.index0 }}" id="service-{{ servicio.id }}">
+                    <div class="service-card__header-row">
+                        <div class="service-card__icon-wrap">
+                            {{ servicio.icon_svg | safe }}
+                        </div>
+                        <div>
+                            <h3 class="service-card__name">{{ servicio.nombre }}</h3>
+                            <p class="service-card__duration">{{ servicio.duracion }}</p>
+                        </div>
+                    </div>
+                    <div class="service-card__price-row">
+                        <span class="service-card__price">${{ "{:,.0f}".format(servicio.precio) }}</span>
+                    </div>
+                    <p class="service-card__desc">{{ servicio.descripcion }}</p>
+                    <button class="service-card__cta" data-service-id="{{ servicio.id }}">Reservar</button>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+
+        <aside class="booking-business-info" id="booking-info">
+            <article class="booking-business-card">
+                <h3>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.5a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z"/><path d="M12 21s7.5-4.35 7.5-11.25a7.5 7.5 0 1 0-15 0C4.5 16.65 12 21 12 21Z"/></svg>
+                    Dirección
+                </h3>
+                <p>{{ shop.address }}</p>
+                <a href="{{ shop.maps_url }}" target="_blank" rel="noopener noreferrer">Ver dirección</a>
+            </article>
+
+            <article class="booking-business-card">
+                <h3>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.25 15.75V8.25A2.25 2.25 0 0 1 4.5 6h15a2.25 2.25 0 0 1 2.25 2.25v7.5A2.25 2.25 0 0 1 19.5 18h-15a2.25 2.25 0 0 1-2.25-2.25Z"/><path d="m3 16 5.25-5.25a2.25 2.25 0 0 1 3.182 0L15 14.318"/><path d="M17.25 9.75h.008v.008h-.008V9.75Z"/></svg>
+                    Portafolio
+                </h3>
+                {% set preview_images = portfolio_images[:4] if portfolio_images else [] %}
+                {% set remaining_images = (portfolio_images | length) - 4 if portfolio_images and (portfolio_images | length) > 4 else 0 %}
+                <button type="button" id="open-portfolio-gallery" class="booking-business-card__portfolio-trigger" aria-label="Abrir galería de portafolio">
+                    {% if preview_images %}
+                    <div class="booking-portfolio-preview">
+                        {% for img in preview_images %}
+                        <span class="booking-portfolio-preview__tile">
+                            <img src="{{ img.imagen_url }}" alt="Portafolio {{ loop.index }}">
+                            {% if loop.last and remaining_images > 0 %}
+                            <span class="booking-portfolio-preview__more">+{{ remaining_images }}</span>
+                            {% endif %}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <img class="booking-business-card__portfolio" src="{{ url_for('static', filename=shop.portfolio_image) }}" alt="Portafolio {{ shop.name }}">
+                    {% endif %}
+                    <span class="booking-business-card__portfolio-overlay">Toca para ver galería completa</span>
+                </button>
+            </article>
+
+            <article class="booking-business-card booking-business-card--schedule">
+                <h3>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v6l4 2"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                    Horario hoy
+                </h3>
+                <p class="booking-business-card__hours">{{ shop.today_hours }}</p>
+                <table class="booking-business-card__table">
+                    <thead>
+                        <tr>
+                            <th>Día</th>
+                            <th>Apertura</th>
+                            <th>Cierre</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in shop.schedule %}
+                        <tr{% if row.closed | default(false) %} class="booking-schedule-row--closed"{% endif %}>
+                            <td>
+                                {{ row.day }}
+                                {% if row.is_today %}
+                                <span class="booking-business-card__today">Hoy</span>
+                                {% endif %}
+                            </td>
+                            {% if row.closed | default(false) %}
+                            <td colspan="2" class="booking-schedule-closed-label">Cerrado</td>
+                            {% else %}
+                            <td>{{ row.open }}</td>
+                            <td>{{ row.close }}</td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </article>
+        </aside>
+    </div>
+
+    {% if productos %}
+    <section class="booking-products" id="booking-products">
+        <p class="booking-products__category">Productos disponibles</p>
+        <div class="booking-products__grid">
+            {% for producto in productos %}
+            <article class="product-card" id="product-{{ producto.id }}">
+                <div class="product-card__media">
+                    {% if producto.imagen_url %}
+                    <img src="{{ producto.imagen_url }}" alt="{{ producto.nombre }}" class="product-card__img">
+                    {% else %}
+                    <div class="product-card__img-placeholder">Icy Barber</div>
+                    {% endif %}
+                </div>
+                <div class="product-card__header">
+                    <h3 class="product-card__name">{{ producto.nombre }}</h3>
+                </div>
+                {% if producto.stock > 0 %}
+                <p class="product-card__availability">Disponible · {{ producto.stock }} unidades</p>
+                {% else %}
+                <p class="product-card__availability product-card__availability--low">Agotado</p>
+                {% endif %}
+                {% if producto.detalles %}
+                <p class="product-card__desc">{{ producto.detalles }}</p>
+                {% endif %}
+                <div class="product-card__footer">
+                    <span class="product-card__price">${{ "{:,.0f}".format(producto.precio) }}</span>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</main>
+
+
+<div class="booking-modal" id="booking-modal">
+    <div class="booking-modal__backdrop" id="booking-modal-close"></div>
+    <div class="booking-modal__panel">
+        <button class="booking-modal__x" id="booking-modal-x">×</button>
+        
+        <!-- Barra de progreso -->
+        <div class="booking-modal__progress">
+            <div class="booking-progress__step booking-progress__step--active" data-step="1">
+                <div class="booking-progress__dot">1</div>
+                <span>Servicio</span>
+            </div>
+            <div class="booking-progress__line"></div>
+            <div class="booking-progress__step" data-step="2">
+                <div class="booking-progress__dot">2</div>
+                <span>Fecha</span>
+            </div>
+            <div class="booking-progress__line"></div>
+            <div class="booking-progress__step" data-step="3">
+                <div class="booking-progress__dot">3</div>
+                <span>Barbero</span>
+            </div>
+            <div class="booking-progress__line"></div>
+            <div class="booking-progress__step" data-step="4">
+                <div class="booking-progress__dot">4</div>
+                <span>Hora</span>
+            </div>
+        </div>
+
+        <h3 id="modal-service-name">Servicio</h3>
+
+        <div class="booking-modal__block" id="block-dates" style="display:none;">
+            <h4>
+                <svg class="booking-block-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                Elige una fecha
+            </h4>
+            <div id="modal-dates" class="booking-modal__chips"></div>
+        </div>
+
+        <div class="booking-modal__block" id="block-barbers" style="display:none;">
+            <h4>
+                <svg class="booking-block-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                Elige quién realizará el servicio
+            </h4>
+            <div id="modal-barbers" class="booking-modal__chips"></div>
+        </div>
+
+        <div class="booking-modal__block" id="block-slots" style="display:none;">
+            <h4>
+                <svg class="booking-block-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                Elige una hora
+            </h4>
+            <p class="booking-modal__slot-note">Los horarios se muestran en lapsos de 40 minutos.</p>
+            <div id="modal-slots" class="booking-modal__chips"></div>
+        </div>
+
+        <p id="booking-modal-status" class="booking-status" style="margin-top: 10px;"></p>
+
+        <div class="booking-modal__actions">
+            <button type="button" id="modal-cancel">Cancelar</button>
+            <button type="button" id="modal-prev" style="display:none;">Atrás</button>
+            <button type="button" id="modal-save">Siguiente</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de detalles de cliente -->
+<div class="booking-modal" id="booking-details-modal">
+    <div class="booking-modal__backdrop" id="booking-details-close"></div>
+    <div class="booking-modal__panel">
+        <button class="booking-modal__x" id="booking-details-x">×</button>
+        
+        <!-- Barra de progreso para detalles -->
+        <div class="booking-modal__progress">
+            <div class="booking-progress__step booking-progress__step--active" data-step="1">
+                <div class="booking-progress__dot">1</div>
+                <span>Servicio</span>
+            </div>
+            <div class="booking-progress__line booking-progress__line--active"></div>
+            <div class="booking-progress__step booking-progress__step--active" data-step="2">
+                <div class="booking-progress__dot">2</div>
+                <span>Fecha</span>
+            </div>
+            <div class="booking-progress__line booking-progress__line--active"></div>
+            <div class="booking-progress__step booking-progress__step--active" data-step="3">
+                <div class="booking-progress__dot">3</div>
+                <span>Barbero</span>
+            </div>
+            <div class="booking-progress__line booking-progress__line--active"></div>
+            <div class="booking-progress__step booking-progress__step--active" data-step="4">
+                <div class="booking-progress__dot">4</div>
+                <span>Hora</span>
+            </div>
+            <div class="booking-progress__line"></div>
+            <div class="booking-progress__step booking-progress__step--active" data-step="5">
+                <div class="booking-progress__dot">✓</div>
+                <span>Confirmar</span>
+            </div>
+        </div>
+
+        <h2 style="margin-top: 0; margin-bottom: 16px;">Detalles de la reservación</h2>
+
+        <form id="booking-customer-form" class="booking-customer-form">
+            <div class="booking-form__row">
+                <label for="nombres">Nombres</label>
+                <input id="nombres" name="nombres" type="text" maxlength="80" required>
+            </div>
+            <div class="booking-form__row">
+                <label for="apellidos">Apellidos</label>
+                <input id="apellidos" name="apellidos" type="text" maxlength="80" required>
+            </div>
+            <div class="booking-form__row">
+                <label for="telefono">Número de teléfono</label>
+                <input id="telefono" name="telefono" type="tel" data-phone-mask placeholder="246 123 4567" maxlength="12" required>
+            </div>
+            <div class="booking-form__row">
+                <label for="email">Correo electrónico</label>
+                <input id="email" name="email" type="email" maxlength="120" required>
+            </div>
+        </form>
+
+        <div id="booking-items-modal" class="booking-items" style="margin-top: 16px;"></div>
+        
+        <p id="booking-status-modal" class="booking-status" style="margin-top: 12px;"></p>
+
+        <div class="booking-modal__actions">
+            <button type="button" id="details-add-service">Añadir otro servicio</button>
+            <button type="button" id="details-prev">Atrás</button>
+            <button type="button" id="details-confirm">Confirmar reservación</button>
+        </div>
+    </div>
+</div>
+
+<div class="booking-modal" id="booking-success-modal">
+    <div class="booking-modal__backdrop"></div>
+    <div class="booking-modal__panel booking-modal__panel--success">
+        <div class="booking-success__icon">✓</div>
+        <h2>Reservación creada correctamente</h2>
+        <p>Te enviaremos una notificación al correo electrónico registrado.</p>
+        <p>Por favor llega 5 minutos antes de tu cita para confirmar tu atención.</p>
+        <p>Si necesitas cancelar, hazlo con anticipación para liberar el horario.</p>
+
+        <div id="booking-success-details" class="booking-success__details"></div>
+
+        <div class="booking-modal__actions booking-modal__actions--center">
+            <button type="button" id="booking-success-accept" class="booking-success__btn">Aceptar</button>
+        </div>
+    </div>
+</div>
+
+<div class="booking-modal" id="portfolio-gallery-modal">
+    <div class="booking-modal__backdrop" id="portfolio-gallery-close-backdrop"></div>
+    <div class="booking-modal__panel booking-modal__panel--gallery">
+        <button class="booking-modal__x" id="portfolio-gallery-close-btn">×</button>
+        <div class="portfolio-gallery">
+            <div class="portfolio-gallery__hero-wrap">
+                <button type="button" id="portfolio-gallery-prev" class="portfolio-gallery__nav portfolio-gallery__nav--prev" aria-label="Imagen anterior">❮</button>
+                <img id="portfolio-gallery-hero" class="portfolio-gallery__hero" src="{{ url_for('static', filename=shop.portfolio_image) }}" alt="Imagen principal del portafolio">
+                <button type="button" id="portfolio-gallery-next" class="portfolio-gallery__nav portfolio-gallery__nav--next" aria-label="Imagen siguiente">❯</button>
+                <span id="portfolio-gallery-counter" class="portfolio-gallery__counter">1 / 1</span>
+            </div>
+            <div id="portfolio-gallery-thumbs" class="portfolio-gallery__thumbs"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SERVICES = {{ servicios | tojson }};
+let BARBEROS = {{ barberos | tojson }};
+const PORTFOLIO_IMAGES = {{ portfolio_images | default([], true) | tojson }};
+
+const bookingState = {
+    currentServiceId: null,
+    currentDate: null,
+    currentBarberId: null,
+    currentSlot: null,
+    disponibilidad: null,
+    items: [],
+    currentStep: 1
+};
+
+const modal = document.getElementById('booking-modal');
+const detailsModal = document.getElementById('booking-details-modal');
+const modalServiceName = document.getElementById('modal-service-name');
+const modalDates = document.getElementById('modal-dates');
+const modalBarbers = document.getElementById('modal-barbers');
+const modalSlots = document.getElementById('modal-slots');
+const bookingItemsModal = document.getElementById('booking-items-modal');
+const bookingStatusModal = document.getElementById('booking-status-modal');
+const bookingModalStatus = document.getElementById('booking-modal-status');
+const successModal = document.getElementById('booking-success-modal');
+const successDetails = document.getElementById('booking-success-details');
+const portfolioGalleryModal = document.getElementById('portfolio-gallery-modal');
+const portfolioGalleryHero = document.getElementById('portfolio-gallery-hero');
+const portfolioGalleryThumbs = document.getElementById('portfolio-gallery-thumbs');
+const portfolioGalleryCounter = document.getElementById('portfolio-gallery-counter');
+const detailsConfirmBtn = document.getElementById('details-confirm');
+const customerForm = document.getElementById('booking-customer-form');
+const nombresInput = document.getElementById('nombres');
+const apellidosInput = document.getElementById('apellidos');
+const telefonoInput = document.getElementById('telefono');
+const emailInput = document.getElementById('email');
+
+let galleryImages = [];
+let galleryCurrentIndex = 0;
+
+const nextDates = () => {
+    const list = [];
+    const now = new Date();
+    for (let i = 0; i < 10; i++) {
+        const d = new Date(now);
+        d.setDate(now.getDate() + i);
+        list.push(d.toISOString().slice(0, 10));
+    }
+    return list;
+};
+
+const serviceById = (id) => SERVICES.find(s => Number(s.id) === Number(id));
+const barberById = (id) => BARBEROS.find(b => Number(b.id) === Number(id));
+
+const formatDateLabel = (dateIso) => {
+    const dateObj = new Date(`${dateIso}T00:00:00`);
+    return dateObj.toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'long' });
+};
+
+const formatTimeLabel = (time24h) => {
+    const [h, m] = time24h.split(':').map(Number);
+    const suffix = h >= 12 ? 'p. m.' : 'a. m.';
+    const h12 = ((h + 11) % 12) + 1;
+    return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+};
+
+async function refreshBarberosFromApi() {
+    try {
+        const response = await fetch('/api/barberos');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (Array.isArray(data)) {
+            BARBEROS = data;
+        }
+    } catch (_) {
+        // Si falla la consulta, mantenemos los barberos inyectados por servidor.
+    }
+}
+
+function animateStepBlock(blockId) {
+    const block = document.getElementById(blockId);
+    if (!block || block.style.display === 'none') return;
+    block.classList.remove('booking-step-enter');
+    // Reinicia la animación
+    void block.offsetWidth;
+    block.classList.add('booking-step-enter');
+}
+
+async function fetchDisponibilidad() {
+    const response = await fetch(`/api/disponibilidad?servicio_id=${bookingState.currentServiceId}&fecha=${bookingState.currentDate}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'No hay disponibilidad para esa fecha.');
+    bookingState.disponibilidad = data;
+
+    const availableBarbers = data.barberos.filter(b => (data.slots[String(b.id)] || []).length > 0);
+    if (!availableBarbers.find(b => Number(b.id) === Number(bookingState.currentBarberId))) {
+        bookingState.currentBarberId = availableBarbers[0]?.id || null;
+    }
+    renderBarbers();
+    renderSlots();
+}
+
+function updateProgress() {
+    const progress = document.querySelector('#booking-modal .booking-modal__progress');
+    const steps = progress ? Array.from(progress.querySelectorAll('.booking-progress__step')) : [];
+    const lines = progress ? Array.from(progress.querySelectorAll('.booking-progress__line')) : [];
+
+    steps.forEach((step, idx) => {
+        step.classList.remove('booking-progress__step--active');
+        if (idx + 1 <= bookingState.currentStep) {
+            step.classList.add('booking-progress__step--active');
+        }
+    });
+
+    lines.forEach((line, idx) => {
+        line.classList.toggle('booking-progress__line--active', idx < bookingState.currentStep - 1);
+    });
+}
+
+function showStep(step) {
+    bookingState.currentStep = step;
+    updateProgress();
+    
+    document.getElementById('block-dates').style.display = step >= 2 ? 'block' : 'none';
+    document.getElementById('block-barbers').style.display = step >= 3 ? 'block' : 'none';
+    document.getElementById('block-slots').style.display = step >= 4 ? 'block' : 'none';
+    
+    const prevBtn = document.getElementById('modal-prev');
+    const saveBtn = document.getElementById('modal-save');
+    
+    prevBtn.style.display = step > 1 ? 'inline-block' : 'none';
+    saveBtn.textContent = step === 4 ? 'Guardar' : 'Siguiente';
+    
+    if (step === 2) renderDates();
+    if (step === 3) renderBarbers();
+    if (step === 4) renderSlots();
+
+    if (step === 2) animateStepBlock('block-dates');
+    if (step === 3) animateStepBlock('block-barbers');
+    if (step === 4) animateStepBlock('block-slots');
+}
+
+async function openModal(serviceId) {
+    await refreshBarberosFromApi();
+
+    bookingState.currentServiceId = Number(serviceId);
+    bookingState.currentDate = nextDates()[0];
+    bookingState.currentBarberId = null;
+    bookingState.currentSlot = null;
+    bookingState.disponibilidad = null;
+    bookingState.currentStep = 1;
+
+    const service = serviceById(serviceId);
+    modalServiceName.textContent = service ? service.nombre : 'Servicio';
+    
+    modal.classList.add('is-open');
+    updateProgress();
+    showStep(2);
+    fetchDisponibilidad().catch(err => setModalStatus(err.message, true));
+}
+
+function closeModal() {
+    modal.classList.remove('is-open');
+}
+
+function openDetailsModal() {
+    setModalStatus('', false);
+    setStatusModal('', false);
+    detailsModal.classList.add('is-open');
+    renderItemsModal();
+}
+
+function closeDetailsModal() {
+    detailsModal.classList.remove('is-open');
+}
+
+function renderDates() {
+    const dates = nextDates();
+    modalDates.innerHTML = dates.map(d => {
+        const isActive = d === bookingState.currentDate;
+        return `<button class="chip ${isActive ? 'is-active' : ''}" data-date="${d}"><span class="chip__date-main">${formatDateLabel(d)}</span></button>`;
+    }).join('');
+}
+
+function renderBarbers() {
+    const data = bookingState.disponibilidad;
+    if (!data) return;
+    modalBarbers.innerHTML = data.barberos.map(b => {
+        const slots = data.slots[String(b.id)] || [];
+        const disabled = slots.length === 0;
+        const active = Number(bookingState.currentBarberId) === Number(b.id);
+        return `<button class="chip chip--barber ${active ? 'is-active' : ''}" data-barber-id="${b.id}" ${disabled ? 'disabled' : ''}><img src="${b.avatar_url}" alt="${b.nombre}" class="chip__avatar" onerror="this.src='/static/img/camilo.jpg'"/><span class="chip__barber-name">${b.nombre}</span></button>`;
+    }).join('');
+}
+
+function renderSlots() {
+    const data = bookingState.disponibilidad;
+    if (!data || !bookingState.currentBarberId) {
+        modalSlots.innerHTML = '<span class="chip-hint">Selecciona barbero</span>';
+        return;
+    }
+
+    const slots = data.slots[String(bookingState.currentBarberId)] || [];
+    modalSlots.innerHTML = slots.length
+        ? slots.map(h => `<button class="chip chip--time ${bookingState.currentSlot === h ? 'is-active' : ''}" data-slot="${h}"><span class="chip__time-main">${formatTimeLabel(h)}</span></button>`).join('')
+        : '<span class="chip-hint">Sin horas disponibles para este barbero.</span>';
+}
+
+function renderItemsModal() {
+    if (bookingState.items.length === 0) {
+        bookingItemsModal.innerHTML = '';
+        return;
+    }
+
+    bookingItemsModal.innerHTML = bookingState.items.map((item, idx) => `
+        <article class="booking-item-card">
+            <div>
+                <h4>${item.servicio_nombre}</h4>
+                <p>${item.fecha} · ${item.hora_inicio}</p>
+                <p>${item.barbero_nombre}</p>
+            </div>
+            <button type="button" data-remove-item="${idx}">Eliminar</button>
+        </article>
+    `).join('');
+}
+
+function setStatusModal(text, isError = false) {
+    bookingStatusModal.textContent = text;
+    bookingStatusModal.className = isError ? 'booking-status booking-status--error' : 'booking-status booking-status--ok';
+}
+
+function setModalStatus(text, isError = false) {
+    if (!bookingModalStatus) return;
+    bookingModalStatus.textContent = text;
+    bookingModalStatus.className = isError ? 'booking-status booking-status--error' : 'booking-status booking-status--ok';
+}
+
+function showBookingSuccess(customer, citas) {
+    successDetails.innerHTML = `
+        <h4>Resumen de la reservación</h4>
+        <p><strong>Cliente:</strong> ${customer.nombres} ${customer.apellidos}</p>
+        <p><strong>Teléfono:</strong> ${customer.telefono}</p>
+        <p><strong>Correo:</strong> ${customer.email}</p>
+        <ul>${(citas || []).map(c => `<li>${c.servicio} · ${c.fecha} · ${formatTimeLabel(c.hora_inicio)}</li>`).join('')}</ul>
+    `;
+    successModal.classList.add('is-open');
+}
+
+function openPortfolioGallery() {
+    if (!portfolioGalleryModal) return;
+    portfolioGalleryModal.classList.add('is-open');
+}
+
+function closePortfolioGallery() {
+    if (!portfolioGalleryModal) return;
+    portfolioGalleryModal.classList.remove('is-open');
+}
+
+function updatePortfolioHero(index) {
+    if (!portfolioGalleryHero || !portfolioGalleryThumbs || !galleryImages.length) return;
+
+    galleryCurrentIndex = (index + galleryImages.length) % galleryImages.length;
+    portfolioGalleryHero.classList.add('is-switching');
+    setTimeout(() => {
+        portfolioGalleryHero.src = galleryImages[galleryCurrentIndex].imagen_url;
+    }, 90);
+    setTimeout(() => {
+        portfolioGalleryHero.classList.remove('is-switching');
+    }, 220);
+
+    if (portfolioGalleryCounter) {
+        portfolioGalleryCounter.textContent = `${galleryCurrentIndex + 1} / ${galleryImages.length}`;
+    }
+
+    portfolioGalleryThumbs.querySelectorAll('.portfolio-gallery__thumb').forEach((el, idx) => {
+        el.classList.toggle('portfolio-gallery__thumb--active', idx === galleryCurrentIndex);
+    });
+}
+
+function setConfirmLoading(loading) {
+    if (!detailsConfirmBtn) return;
+    detailsConfirmBtn.classList.toggle('is-loading', loading);
+    detailsConfirmBtn.disabled = loading;
+}
+
+function renderPortfolioGallery() {
+    if (!portfolioGalleryHero || !portfolioGalleryThumbs) return;
+
+    const fallbackImage = {
+        imagen_url: '{{ url_for('static', filename=shop.portfolio_image) }}',
+    };
+    galleryImages = PORTFOLIO_IMAGES.length ? PORTFOLIO_IMAGES : [fallbackImage];
+    galleryCurrentIndex = 0;
+
+    portfolioGalleryThumbs.innerHTML = galleryImages.map((img, idx) => `
+        <button type="button" class="portfolio-gallery__thumb ${idx === 0 ? 'portfolio-gallery__thumb--active' : ''}" data-portfolio-src="${img.imagen_url}" aria-label="Imagen de portafolio ${idx + 1}">
+            <img src="${img.imagen_url}" alt="Portafolio ${idx + 1}">
+        </button>
+    `).join('');
+
+    updatePortfolioHero(0);
+}
+
+function validateCustomerData(customer) {
+    const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]{2,80}$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneDigits = (customer.telefono || '').replace(/\D/g, '');
+
+    if (!nameRegex.test(customer.nombres || '')) {
+        return 'Ingresa nombres válidos (solo letras y espacios).';
+    }
+    if (!nameRegex.test(customer.apellidos || '')) {
+        return 'Ingresa apellidos válidos (solo letras y espacios).';
+    }
+    if (phoneDigits.length !== 10) {
+        return 'El teléfono debe tener exactamente 10 dígitos numéricos.';
+    }
+    if (!emailRegex.test(customer.email || '')) {
+        return 'Ingresa un correo válido, por ejemplo: nombre@dominio.com.';
+    }
+    return null;
+}
+
+async function confirmBooking() {
+    if (!customerForm.reportValidity()) return;
+
+    if (bookingState.items.length === 0) {
+        setStatusModal('Debes agregar al menos un servicio antes de confirmar.', true);
+        return;
+    }
+
+    const customer = Object.fromEntries(new FormData(customerForm).entries());
+    customer.telefono = (customer.telefono || '').replace(/\D/g, '');
+
+    const validationError = validateCustomerData(customer);
+    if (validationError) {
+        setStatusModal(validationError, true);
+        return;
+    }
+    const payload = {
+        ...customer,
+        items: bookingState.items.map(it => ({
+            servicio_id: it.servicio_id,
+            barbero_id: it.barbero_id,
+            fecha: it.fecha,
+            hora_inicio: it.hora_inicio,
+        }))
+    };
+
+    setStatusModal('Creando reservación...');
+    setConfirmLoading(true);
+
+    try {
+        const response = await fetch('/api/citas/public/lote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'No fue posible confirmar.');
+
+        setStatusModal(data.message || 'Reservación confirmada.');
+
+        bookingState.items = [];
+        customerForm.reset();
+        renderItemsModal();
+        closeDetailsModal();
+        showBookingSuccess(customer, data.citas || []);
+    } catch (err) {
+        setStatusModal(err.message, true);
+    } finally {
+        setConfirmLoading(false);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sanitizeLetters = (value) => value.replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]/g, '').slice(0, 80);
+
+    if (nombresInput) {
+        nombresInput.addEventListener('input', () => {
+            nombresInput.value = sanitizeLetters(nombresInput.value);
+        });
+    }
+
+    if (apellidosInput) {
+        apellidosInput.addEventListener('input', () => {
+            apellidosInput.value = sanitizeLetters(apellidosInput.value);
+        });
+    }
+
+    // Phone mask is automatically applied via data-phone-mask attribute
+
+    if (emailInput) {
+        emailInput.addEventListener('input', () => {
+            emailInput.value = emailInput.value.trimStart();
+        });
+    }
+
+    const showInlineError = (text) => setModalStatus(text, true);
+
+    // Seleccionar servicio
+    document.querySelectorAll('.service-card__cta').forEach(btn => {
+        btn.addEventListener('click', () => openModal(btn.dataset.serviceId));
+    });
+
+    // Seleccionar fecha
+    modalDates.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-date]');
+        if (!btn) return;
+        bookingState.currentDate = btn.dataset.date;
+        bookingState.currentSlot = null;
+        renderDates();
+        fetchDisponibilidad().catch(err => showInlineError(err.message));
+    });
+
+    // Seleccionar barbero
+    modalBarbers.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-barber-id]');
+        if (!btn) return;
+        bookingState.currentBarberId = Number(btn.dataset.barberId);
+        bookingState.currentSlot = null;
+        renderBarbers();
+        renderSlots();
+    });
+
+    // Seleccionar hora
+    modalSlots.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-slot]');
+        if (!btn) return;
+        bookingState.currentSlot = btn.dataset.slot;
+        renderSlots();
+    });
+
+    // Navegar pasos en modal de selección
+    document.getElementById('modal-save').addEventListener('click', () => {
+        if (bookingState.currentStep === 2) {
+            if (!bookingState.currentDate) {
+                showInlineError('Debes seleccionar una fecha.');
+                return;
+            }
+            setModalStatus('', false);
+            showStep(3);
+        } else if (bookingState.currentStep === 3) {
+            if (!bookingState.currentBarberId) {
+                showInlineError('Debes seleccionar un barbero.');
+                return;
+            }
+            setModalStatus('', false);
+            showStep(4);
+        } else if (bookingState.currentStep === 4) {
+            if (!bookingState.currentSlot) {
+                showInlineError('Debes seleccionar una hora.');
+                return;
+            }
+            
+            // Agregar servicio y abrir modal de detalles
+            const service = serviceById(bookingState.currentServiceId);
+            const barber = barberById(bookingState.currentBarberId);
+            bookingState.items.push({
+                servicio_id: bookingState.currentServiceId,
+                servicio_nombre: service?.nombre || 'Servicio',
+                barbero_id: bookingState.currentBarberId,
+                barbero_nombre: barber?.nombre || 'Barbero',
+                fecha: bookingState.currentDate,
+                hora_inicio: bookingState.currentSlot,
+            });
+
+            closeModal();
+            openDetailsModal();
+        }
+    });
+
+    document.getElementById('modal-prev').addEventListener('click', () => {
+        if (bookingState.currentStep > 1) {
+            showStep(bookingState.currentStep - 1);
+        }
+    });
+
+    document.getElementById('modal-cancel').addEventListener('click', closeModal);
+    document.getElementById('booking-modal-x').addEventListener('click', closeModal);
+    document.getElementById('booking-modal-close').addEventListener('click', closeModal);
+
+    // Modal de detalles
+    document.getElementById('details-add-service').addEventListener('click', () => {
+        closeDetailsModal();
+        const firstService = SERVICES[0];
+        if (firstService) openModal(firstService.id);
+    });
+
+    document.getElementById('details-prev').addEventListener('click', () => {
+        closeDetailsModal();
+        openModal(bookingState.currentServiceId);
+    });
+
+    document.getElementById('details-confirm').addEventListener('click', confirmBooking);
+
+    document.getElementById('booking-details-x').addEventListener('click', closeDetailsModal);
+    document.getElementById('booking-details-close').addEventListener('click', closeDetailsModal);
+    document.getElementById('booking-success-accept').addEventListener('click', () => {
+        window.location.reload();
+    });
+
+    renderPortfolioGallery();
+    document.getElementById('open-portfolio-gallery')?.addEventListener('click', openPortfolioGallery);
+    document.getElementById('portfolio-gallery-close-btn')?.addEventListener('click', closePortfolioGallery);
+    document.getElementById('portfolio-gallery-close-backdrop')?.addEventListener('click', closePortfolioGallery);
+    document.getElementById('portfolio-gallery-prev')?.addEventListener('click', () => updatePortfolioHero(galleryCurrentIndex - 1));
+    document.getElementById('portfolio-gallery-next')?.addEventListener('click', () => updatePortfolioHero(galleryCurrentIndex + 1));
+
+    portfolioGalleryThumbs?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-portfolio-src]');
+        if (!btn || !portfolioGalleryHero) return;
+        const targetIndex = Array.from(portfolioGalleryThumbs.querySelectorAll('.portfolio-gallery__thumb')).indexOf(btn);
+        if (targetIndex >= 0) {
+            updatePortfolioHero(targetIndex);
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (!portfolioGalleryModal?.classList.contains('is-open')) return;
+        if (e.key === 'Escape') closePortfolioGallery();
+        if (e.key === 'ArrowLeft') updatePortfolioHero(galleryCurrentIndex - 1);
+        if (e.key === 'ArrowRight') updatePortfolioHero(galleryCurrentIndex + 1);
+    });
+
+    // Eliminar servicio del carrito
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-remove-item]');
+        if (!btn) return;
+        const idx = Number(btn.dataset.removeItem);
+        bookingState.items.splice(idx, 1);
+        renderItemsModal();
+    });
+    
+    // Navegación entre secciones
+    document.querySelectorAll('.booking-navbar__link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const section = link.dataset.section;
+            
+            // Actualizar activo
+            document.querySelectorAll('.booking-navbar__link').forEach(l => {
+                l.classList.remove('booking-navbar__link--active');
+            });
+            link.classList.add('booking-navbar__link--active');
+            
+            // Scroll a la sección
+            const sectionEl = document.getElementById(`booking-${section}`);
+            if (sectionEl) {
+                sectionEl.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+    });
+    
+    // Detectar scroll para actualizar navbar activa
+    window.addEventListener('scroll', () => {
+        const infoEl = document.getElementById('booking-info');
+        const servicesEl = document.getElementById('booking-services');
+        const productsEl = document.getElementById('booking-products');
+        const scrollPos = window.scrollY + 120;
+
+        const sections = [
+            { key: 'info', el: infoEl },
+            { key: 'services', el: servicesEl },
+            { key: 'products', el: productsEl },
+        ].filter(s => !!s.el);
+
+        if (!sections.length) return;
+
+        let activeKey = sections[0].key;
+        sections.forEach((section) => {
+            if (scrollPos >= section.el.offsetTop) {
+                activeKey = section.key;
+            }
+        });
+        
+        const links = document.querySelectorAll('.booking-navbar__link');
+        links.forEach(link => link.classList.remove('booking-navbar__link--active'));
+
+        document.querySelector(`[data-section="${activeKey}"]`)?.classList.add('booking-navbar__link--active');
+    });
+});
+</script>
+{% endblock %}

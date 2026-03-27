@@ -1,0 +1,1921 @@
+{% extends "base.html" %}
+
+{% block title %}Icy Barber - Agenda{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block body_class %}dashboard-page{% endblock %}
+
+{% block content %}
+
+<!-- Back link -->
+<a href="{{ url_for('booking') if keep_session_active else url_for('logout') }}" class="dash-back-link" id="back-to-booking">
+    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    Ir a reservaciones
+</a>
+
+{% if current_user.role == 'admin' %}
+<section class="admin-barberos" id="admin-barberos-module">
+    <div class="admin-barberos__header">
+        <div>
+            <h3>Gestión de barberos</h3>
+            <p class="admin-barberos__subtitle">Crea, edita y desactiva perfiles con su horario laboral.</p>
+        </div>
+        <div class="admin-barberos__toolbar">
+            <button type="button" id="admin-open-create" class="admin-barberos__new-btn">Registrar barbero</button>
+        </div>
+    </div>
+
+    <form id="admin-barbero-form" class="admin-barberos__form admin-barberos__form--hidden">
+        <input type="hidden" id="barbero-edit-id" name="barbero_edit_id">
+        <input type="hidden" id="avatar-hidden" name="avatar" value="camilo.jpg">
+
+        <div class="admin-field">
+            <label for="nombre">Nombre</label>
+            <input id="nombre" type="text" name="nombre" required>
+        </div>
+
+        <div class="admin-field">
+            <label for="telefono">Teléfono</label>
+            <input id="telefono" type="tel" name="telefono" data-phone-mask placeholder="300 123 4567" maxlength="12" required>
+        </div>
+
+        <div class="admin-field">
+            <label for="email">Correo electrónico</label>
+            <input id="email" type="email" name="email" required>
+        </div>
+
+        <div class="admin-field">
+            <label for="username">Usuario</label>
+            <input id="username" type="text" name="username" required>
+        </div>
+
+        <div class="admin-field admin-field--password">
+            <label for="password_temporal">Contraseña</label>
+            <div class="admin-password-wrap">
+                <input id="password_temporal" type="password" name="password_temporal" required>
+                <button type="button" class="admin-password-toggle" data-target="password_temporal" title="Mostrar/ocultar">
+                    <svg class="password-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg class="password-eye-slash" style="display:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="admin-field admin-field--password">
+            <label for="password_confirmacion">Confirmar contraseña</label>
+            <div class="admin-password-wrap">
+                <input id="password_confirmacion" type="password" name="password_confirmacion" required>
+                <button type="button" class="admin-password-toggle" data-target="password_confirmacion" title="Mostrar/ocultar">
+                    <svg class="password-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg class="password-eye-slash" style="display:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="admin-field admin-field--upload">
+            <label>Foto de perfil</label>
+            <div class="admin-upload">
+                <img id="avatar-preview" src="{{ url_for('static', filename='img/camilo.jpg') }}" alt="Preview avatar">
+                <input id="avatar-file" type="file" accept="image/png,image/jpeg,image/webp">
+                <button type="button" id="avatar-upload-btn">Subir imagen</button>
+            </div>
+        </div>
+
+        <div class="admin-field admin-field--days">
+            <label>Días de trabajo</label>
+            <div class="admin-days" id="admin-days-group">
+                <label><input type="checkbox" value="1" checked> Lun</label>
+                <label><input type="checkbox" value="2" checked> Mar</label>
+                <label><input type="checkbox" value="3" checked> Mié</label>
+                <label><input type="checkbox" value="4" checked> Jue</label>
+                <label><input type="checkbox" value="5" checked> Vie</label>
+                <label><input type="checkbox" value="6"> Sáb</label>
+                <label><input type="checkbox" value="7"> Dom</label>
+            </div>
+        </div>
+
+        <div class="admin-field">
+            <label for="hora_inicio">Hora inicio</label>
+            <input id="hora_inicio" type="time" name="hora_inicio" value="09:00">
+        </div>
+
+        <div class="admin-field">
+            <label for="hora_fin">Hora fin</label>
+            <input id="hora_fin" type="time" name="hora_fin" value="18:00">
+        </div>
+
+        <div class="admin-actions">
+            <button type="submit" id="admin-barbero-submit">Guardar barbero</button>
+            <button type="button" id="admin-barbero-cancel" class="admin-barberos__cancel">Cancelar</button>
+        </div>
+    </form>
+
+    <p id="admin-barberos-msg" class="admin-barberos__msg"></p>
+    <div id="admin-barberos-list" class="admin-barberos__list"></div>
+</section>
+{% endif %}
+
+<section class="dash-ops" id="dash-ops">
+    <div class="dash-ops__header">
+        <h3>{% if current_user.role == 'admin' %}Operaciones de citas{% else %}Mis citas{% endif %}</h3>
+        <div class="dash-ops__header-actions">
+            <button type="button" id="dash-ops-toggle" class="dash-ops__toggle" aria-expanded="false">Mostrar listado</button>
+        </div>
+    </div>
+    <div id="dash-ops-content" class="dash-ops__content" style="display:none;">
+        <p id="dash-ops-msg" class="dash-ops__msg"></p>
+        <div id="dash-ops-list" class="dash-ops__list"></div>
+    </div>
+</section>
+
+{% if current_user.role == 'barbero' %}
+<section class="dash-service" id="dash-service" style="display:none;">
+    <div class="dash-service__header">
+        <h3>Servicio</h3>
+        <p>Controla días de descanso, horario temporal y estado de tu perfil para futuras reservas.</p>
+    </div>
+
+    <article class="dash-service__card" id="dash-service-profile-card">
+        <div>
+            <h4>Estado del perfil</h4>
+            <p id="dash-service-profile-state">Cargando...</p>
+        </div>
+        <button type="button" id="dash-service-toggle-profile">Cambiar estado</button>
+    </article>
+
+    <div class="dash-service__grid">
+        <article class="dash-service__card">
+            <h4>Marcar descanso</h4>
+            <form id="dash-service-off-form" class="dash-service__form">
+                <label>Desde <input type="date" name="fecha_inicio" required></label>
+                <label>Hasta <input type="date" name="fecha_fin" required></label>
+                <label>Motivo (opcional) <input type="text" name="motivo" maxlength="80" placeholder="Ej. asunto personal"></label>
+                <button type="submit">Aplicar descanso</button>
+            </form>
+        </article>
+
+        <article class="dash-service__card">
+            <h4>Horario temporal</h4>
+            <form id="dash-service-temporal-form" class="dash-service__form">
+                <label>Desde <input type="date" name="fecha_inicio" required></label>
+                <label>Hasta <input type="date" name="fecha_fin" required></label>
+                <div class="dash-service__time-row">
+                    <label>Hora inicio <input type="time" name="hora_inicio" required></label>
+                    <label>Hora fin <input type="time" name="hora_fin" required></label>
+                </div>
+                <label>Motivo (opcional) <input type="text" name="motivo" maxlength="80" placeholder="Ej. turno especial"></label>
+                <button type="submit">Aplicar horario temporal</button>
+            </form>
+        </article>
+    </div>
+
+    <article class="dash-service__card">
+        <h4>Próximas configuraciones</h4>
+        <p id="dash-service-msg" class="dash-ops__msg"></p>
+        <div id="dash-service-list" class="dash-service__list"></div>
+    </article>
+</section>
+{% endif %}
+
+{% if current_user.role == 'admin' %}
+<section class="dash-clients" id="dash-clients" style="display:none;">
+    <div class="dash-clients__header">
+        <h3>Clientes y analítica</h3>
+        <p>Historial de citas y comportamiento semanal/mensual de la barbería.</p>
+    </div>
+    <div class="dash-clients__cards" id="dash-clients-cards"></div>
+    <div class="dash-clients__charts">
+        <article class="dash-chart-card">
+            <h4>Citas por día</h4>
+            <div id="chart-daily" class="dash-chart"></div>
+        </article>
+        <article class="dash-chart-card">
+            <h4>Clientes por mes</h4>
+            <div id="chart-monthly" class="dash-chart"></div>
+        </article>
+    </div>
+    <article class="dash-history-card">
+        <h4>Historial reciente de citas</h4>
+        <div id="dash-history-list" class="dash-history-list"></div>
+    </article>
+</section>
+
+<section class="dash-catalog" id="dash-catalog" style="display:none;">
+    <div class="dash-catalog__header">
+        <div>
+            <h3>Catálogo e inventario</h3>
+            <p>Administra productos, precio y stock de la barbería.</p>
+        </div>
+        <button type="button" id="catalog-open-create" class="dash-catalog__toggle-btn">Registrar producto</button>
+    </div>
+    <div class="dash-catalog__tabs" id="dash-catalog-tabs">
+        <button type="button" class="dash-catalog__tab dash-catalog__tab--active" data-catalog-tab="productos">Productos</button>
+        <button type="button" class="dash-catalog__tab" data-catalog-tab="portafolio">Agregar imagen a Portafolio</button>
+    </div>
+    <section id="catalog-panel-productos" class="dash-catalog__panel dash-catalog__panel--active">
+    <div id="catalog-form-wrap" class="dash-catalog__form-wrap dash-catalog__form-wrap--hidden">
+    <form id="catalog-form" class="dash-catalog__form">
+        <input type="hidden" id="catalog-edit-id" name="catalog_edit_id">
+        <input type="hidden" id="catalog-imagen" name="imagen">
+
+        <div class="dash-catalog__field">
+            <label for="catalog-id-item">ID artículo</label>
+            <input type="text" id="catalog-id-item" name="id_item" placeholder="PROD-001" required>
+        </div>
+
+        <div class="dash-catalog__field">
+            <label for="catalog-nombre">Nombre del producto</label>
+            <input type="text" id="catalog-nombre" name="nombre" placeholder="Nombre del producto" required>
+        </div>
+
+        <div class="dash-catalog__field">
+            <label for="catalog-precio">Precio</label>
+            <input type="number" id="catalog-precio" name="precio" placeholder="0" min="0" required>
+        </div>
+
+        <div class="dash-catalog__field">
+            <label for="catalog-stock">Stock</label>
+            <input type="number" id="catalog-stock" name="stock" placeholder="0" min="0" required>
+        </div>
+
+        <div class="dash-catalog__field dash-catalog__field--details">
+            <label for="catalog-detalles">Detalles</label>
+            <textarea id="catalog-detalles" name="detalles" placeholder="Descripción del producto" rows="3"></textarea>
+        </div>
+
+        <div class="dash-catalog__field dash-catalog__field--upload">
+            <label>Imagen del producto</label>
+            <div class="dash-catalog-upload">
+                <img id="catalog-image-preview" src="{{ url_for('static', filename='img/logo.png') }}" alt="Preview producto">
+                <input id="catalog-image-file" type="file" accept="image/png,image/jpeg,image/webp">
+                <button type="button" id="catalog-image-upload-btn">Subir imagen</button>
+            </div>
+        </div>
+
+        <div class="dash-catalog__actions">
+            <button type="submit" id="catalog-submit">Agregar artículo</button>
+            <button type="button" id="catalog-cancel">Cancelar</button>
+        </div>
+    </form>
+    </div>
+    <p id="catalog-msg" class="dash-ops__msg"></p>
+    <div id="catalog-list" class="dash-catalog__list"></div>
+    </section>
+
+    <section id="catalog-panel-portafolio" class="dash-catalog__panel" style="display:none;">
+        <form id="portfolio-form" class="dash-catalog__form dash-catalog__form--portfolio">
+            <div class="dash-catalog__field dash-catalog__field--upload dash-catalog__field--portfolio-upload">
+                <label>Subir imagen de portafolio</label>
+                <div class="dash-catalog-upload dash-catalog-upload--portfolio">
+                    <img id="portfolio-image-preview" src="{{ url_for('static', filename='img/logo_icy.jpeg') }}" alt="Preview portafolio">
+                    <input id="portfolio-image-file" type="file" name="imagen" accept="image/png,image/jpeg,image/webp" required>
+                    <button type="submit" id="portfolio-image-upload-btn">Subir imagen</button>
+                </div>
+            </div>
+        </form>
+        <p id="portfolio-msg" class="dash-ops__msg"></p>
+        <div id="portfolio-list" class="dash-catalog__list"></div>
+    </section>
+</section>
+{% endif %}
+
+<!-- ── Header with Calendar ── -->
+<header class="dash-header" id="dash-header">
+    <div class="dash-header__top">
+        <div class="dash-header__left">
+            <button class="dash-header__month" id="month-selector">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="12 6 12 12 16 14" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                <span id="current-month">Marzo, 2026</span>
+                <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dash-week-nav" aria-label="Navegación semanal">
+                <button type="button" id="week-prev" class="dash-week-nav__btn" title="Semana anterior">Semana ◀</button>
+                <button type="button" id="week-next" class="dash-week-nav__btn" title="Semana siguiente">▶ Semana</button>
+            </div>
+        </div>
+        <div class="flex items-center gap-sm">
+            <div class="dash-view-toggle" id="view-toggle">
+                <button class="dash-view-toggle__btn dash-view-toggle__btn--active" data-view="single" id="view-single-btn">Barbero</button>
+                {% if current_user.role == 'admin' %}
+                <button class="dash-view-toggle__btn" data-view="multi" id="view-multi-btn">Equipo</button>
+                {% endif %}
+            </div>
+            <button class="dash-header__today-btn" id="today-btn" title="Ir a hoy">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </button>
+        </div>
+    </div>
+    
+    <!-- ── Month Picker Modal ── -->
+    <div id="month-picker-modal" class="month-picker-modal" style="display:none;">
+        <div class="month-picker-modal__backdrop"></div>
+        <div class="month-picker-modal__panel">
+            <div class="month-picker-modal__header">
+                <button id="month-picker-prev-year" type="button" title="Año anterior">◀</button>
+                <span id="month-picker-year-display">2026</span>
+                <button id="month-picker-next-year" type="button" title="Siguiente año">▶</button>
+            </div>
+            <div class="month-picker-modal__months" id="month-picker-months"></div>
+            <div class="month-picker-modal__footer">
+                <button id="month-picker-today" type="button">Hoy</button>
+                <button id="month-picker-close" type="button">Cerrar</button>
+            </div>
+        </div>
+    </div>
+    
+    <input type="month" id="month-picker" style="position:absolute; opacity:0; pointer-events:none; width:1px; height:1px;">
+
+    <!-- Week days strip -->
+    <div class="dash-week" id="dash-week">
+        <!-- Rendered by JS -->
+    </div>
+</header>
+
+<!-- ── Barber Selector (mobile single view) ── -->
+<div class="dash-barber-selector" id="barber-selector">
+    <img src="{{ url_for('static', filename='img/camilo.jpg') }}" alt="Camilo" class="dash-barber-selector__avatar" id="selected-barber-avatar">
+    <span class="dash-barber-selector__name" id="selected-barber-name">Camilo</span>
+    <svg class="dash-barber-selector__arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+</div>
+
+<!-- ── Multi-barber Column Headers (desktop) ── -->
+<div class="dash-multi-header" id="multi-header">
+    <div class="dash-multi-header__time"></div>
+    {% for barbero in barberos %}
+    <div class="dash-multi-header__barber" data-barber="{{ barbero.id }}">
+        <img src="{{ url_for('static', filename='img/' + barbero.avatar) }}" alt="{{ barbero.nombre }}">
+        <span>{{ barbero.nombre }}</span>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ── Timeline - Single barber view ── -->
+<div class="dash-timeline dash-timeline--single" id="timeline-single">
+    <!-- Rendered by JS -->
+</div>
+
+<!-- ── Timeline - Multi barber view ── -->
+<div class="dash-timeline dash-timeline--multi" id="timeline-multi">
+    <!-- Rendered by JS -->
+</div>
+
+<!-- ── Bottom Navigation ── -->
+<nav class="dash-bottom-nav" id="bottom-nav">
+    <a href="#" class="dash-nav-item dash-nav-item--active" id="nav-agenda">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span class="dash-nav-item__label">Agenda</span>
+    </a>
+    {% if current_user.role == 'admin' %}
+    <a href="#" class="dash-nav-item" id="nav-clientes">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span class="dash-nav-item__label">Clientes</span>
+    </a>
+    <a href="#" class="dash-nav-item" id="nav-catalogo">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <span class="dash-nav-item__label">Catálogo</span>
+    </a>
+    {% elif current_user.role == 'barbero' %}
+    <a href="#" class="dash-nav-item" id="nav-servicio">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h10"/><path d="M4 17h7"/><circle cx="18" cy="17" r="3"/></svg>
+        <span class="dash-nav-item__label">Servicio</span>
+    </a>
+    {% endif %}
+    <a href="{{ url_for('logout') }}" class="dash-nav-item dash-nav-item--logout" id="nav-salir">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span class="dash-nav-item__label">Salir</span>
+    </a>
+</nav>
+
+<div id="center-feedback" class="center-feedback" aria-live="polite">
+    <div id="center-feedback-card" class="center-feedback__card"></div>
+</div>
+
+<div id="center-confirm" class="center-confirm" aria-live="assertive">
+    <div class="center-confirm__card">
+        <p id="center-confirm-message"></p>
+        <div class="center-confirm__actions">
+            <button type="button" id="center-confirm-accept">Aceptar</button>
+            <button type="button" id="center-confirm-cancel">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ─── Mock Appointments Data (from server) ─────────────
+const CITAS = {{ citas | tojson }};
+const BARBEROS = {{ barberos | tojson }};
+const IS_ADMIN = {{ 'true' if current_user.role == 'admin' else 'false' }};
+const IS_BARBER = {{ 'true' if current_user.role == 'barbero' else 'false' }};
+let citasState = [...CITAS];
+
+// ─── State ────────────────────────────────────────────
+let selectedBarberId = 1;
+let selectedDate = new Date();
+let currentView = 'single'; // 'single' or 'multi'
+let feedbackTimer = null;
+let confirmResolver = null;
+let catalogItemsState = [];
+let portfolioImagesState = [];
+
+const HOURS_START = 8;
+const HOURS_END = 18;
+const SLOT_HEIGHT = 70; // px per hour slot
+
+// ─── Helpers ──────────────────────────────────────────
+function getBarberById(id) {
+    return BARBEROS.find(b => b.id === id);
+}
+
+function formatPrice(n) {
+    return '$' + n.toLocaleString('es-CO');
+}
+
+function getStatusClass(estado) {
+    const map = {
+        'confirmada': 'confirmed',
+        'pendiente': 'pending',
+        'completada': 'completed',
+        'reagendada': 'pending',
+        'cancelada': 'cancelled'
+    };
+    return map[estado] || 'confirmed';
+}
+
+function timeToMinutes(t) {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+}
+
+function getLocalDateKey(dateObj) {
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function setSelectedYearMonth(year, month) {
+    const safeDay = selectedDate ? selectedDate.getDate() : 1;
+    const maxDay = new Date(year, month + 1, 0).getDate();
+    selectedDate = new Date(year, month, Math.min(safeDay, maxDay));
+}
+
+function byStartTime(a, b) {
+    const aStart = timeToMinutes(a.hora_inicio);
+    const bStart = timeToMinutes(b.hora_inicio);
+    if (aStart !== bStart) return aStart - bStart;
+    return timeToMinutes(a.hora_fin) - timeToMinutes(b.hora_fin);
+}
+
+function showCenterFeedback(message, isError = false) {
+    const wrap = document.getElementById('center-feedback');
+    const card = document.getElementById('center-feedback-card');
+    if (!wrap || !card) return;
+
+    card.textContent = message;
+    card.className = isError ? 'center-feedback__card center-feedback__card--error' : 'center-feedback__card center-feedback__card--ok';
+    wrap.classList.add('is-open');
+
+    if (feedbackTimer) {
+        clearTimeout(feedbackTimer);
+    }
+
+    feedbackTimer = setTimeout(() => {
+        wrap.classList.remove('is-open');
+    }, 2200);
+}
+
+function openCenterConfirm(message) {
+    const wrap = document.getElementById('center-confirm');
+    const msg = document.getElementById('center-confirm-message');
+    if (!wrap || !msg) return Promise.resolve(false);
+
+    msg.textContent = message;
+    wrap.classList.add('is-open');
+
+    return new Promise((resolve) => {
+        confirmResolver = resolve;
+    });
+}
+
+function closeCenterConfirm(result) {
+    const wrap = document.getElementById('center-confirm');
+    if (wrap) wrap.classList.remove('is-open');
+    if (confirmResolver) {
+        confirmResolver(Boolean(result));
+        confirmResolver = null;
+    }
+}
+
+// ─── Render Week Strip ────────────────────────────────
+function renderWeek() {
+    const weekEl = document.getElementById('dash-week');
+    const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+    const today = new Date();
+    
+    // Get Monday of the selected week
+    const d = new Date(selectedDate);
+    const dayOfWeek = d.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diff);
+
+    let html = '';
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        const isToday = date.toDateString() === today.toDateString();
+        const isSelected = date.toDateString() === selectedDate.toDateString();
+        const isPast = date < today && !isToday;
+        const isOutsideMonth = date.getMonth() !== selectedDate.getMonth();
+
+        let cls = 'dash-week__day';
+        if (isToday) cls += ' dash-week__day--today';
+        if (isSelected) cls += ' dash-week__day--selected';
+        if (isPast) cls += ' dash-week__day--past';
+        if (isOutsideMonth) cls += ' dash-week__day--outside-month';
+
+        html += `
+            <div class="${cls}" data-date="${getLocalDateKey(date)}" data-outside-month="${isOutsideMonth ? '1' : '0'}" onclick="selectDay(this)">
+                <span class="dash-week__day-label">${dayNames[i]}</span>
+                <span class="dash-week__day-num">${date.getDate()}</span>
+            </div>
+        `;
+    }
+    weekEl.innerHTML = html;
+
+    // Update month label
+    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    document.getElementById('current-month').textContent = `${months[selectedDate.getMonth()]}, ${selectedDate.getFullYear()}`;
+}
+
+function selectDay(el) {
+    if (el.dataset.outsideMonth === '1') {
+        return;
+    }
+    selectedDate = new Date(`${el.dataset.date}T00:00:00`);
+    renderWeek();
+    renderTimeline();
+}
+
+function shiftWeek(weeksDelta) {
+    const base = new Date(selectedDate);
+    base.setDate(base.getDate() + (weeksDelta * 7));
+    selectedDate = base;
+    updateMonthDisplay();
+    renderWeek();
+    renderTimeline();
+}
+
+// ─── Render Appointment Block HTML ─────────────────────
+function appointmentHTML(cita, startPx, heightPx) {
+    const statusCls = getStatusClass(cita.estado);
+    const compact = heightPx < 56;
+    const badges = [];
+    if (cita.pagado) {
+        badges.push(`<span class="appointment-badge appointment-badge--paid">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>`);
+    }
+    if (cita.origen) {
+        badges.push(`<span class="appointment-badge appointment-badge--origin">${cita.origen}</span>`);
+    }
+
+    return `
+        <div class="appointment-block appointment-block--${statusCls} ${compact ? 'appointment-block--compact' : ''}" 
+             style="top: ${startPx}px; height: ${heightPx}px;"
+             title="${cita.cliente} - ${cita.servicio}">
+            <span class="appointment-block__time">${cita.hora_inicio} - ${cita.hora_fin}</span>
+            ${compact
+                ? `<span class="appointment-block__summary">${cita.cliente} · ${cita.servicio}</span>`
+                : `<span class="appointment-block__client">${cita.cliente}</span><span class="appointment-block__service">${cita.servicio}</span>`
+            }
+            ${heightPx > 64 ? `<div class="appointment-block__badges">${badges.join('')}</div>` : ''}
+        </div>
+    `;
+}
+
+// ─── Render Single Barber Timeline ─────────────────────
+function renderSingleTimeline() {
+    const container = document.getElementById('timeline-single');
+    const selectedDateKey = getLocalDateKey(selectedDate);
+    const barberCitas = citasState
+        .filter(c => c.barbero_id === selectedBarberId && c.estado !== 'cancelada' && c.fecha === selectedDateKey)
+        .sort(byStartTime);
+
+    let html = '';
+    for (let h = HOURS_START; h <= HOURS_END; h++) {
+        const timeStr = `${String(h).padStart(2, '0')}:00`;
+        html += `
+            <div class="dash-timeslot">
+                <div class="dash-timeslot__time">${timeStr}</div>
+                <div class="dash-timeslot__content" data-hour="${h}"></div>
+            </div>
+        `;
+    }
+    container.innerHTML = html;
+    container.style.position = 'relative';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dash-single-overlay';
+    container.appendChild(overlay);
+
+    barberCitas.forEach(cita => {
+        const startMin = timeToMinutes(cita.hora_inicio);
+        const endMin = timeToMinutes(cita.hora_fin);
+        const topPx = ((startMin - HOURS_START * 60) / 60) * SLOT_HEIGHT;
+        const heightPx = ((endMin - startMin) / 60) * SLOT_HEIGHT;
+        overlay.insertAdjacentHTML('beforeend', appointmentHTML(cita, topPx, heightPx));
+    });
+
+    const blocks = overlay.querySelectorAll('.appointment-block');
+    blocks.forEach(block => {
+        block.style.left = '60px';
+        block.style.right = '8px';
+    });
+}
+
+// ─── Render Multi-barber Timeline ──────────────────────
+function renderMultiTimeline() {
+    const container = document.getElementById('timeline-multi');
+    const selectedDateKey = getLocalDateKey(selectedDate);
+
+    // Time column
+    let timeColHTML = '';
+    for (let h = HOURS_START; h <= HOURS_END; h++) {
+        const timeStr = `${String(h).padStart(2, '0')}:00`;
+        timeColHTML += `<div class="dash-timeline__time-label">${timeStr}</div>`;
+    }
+
+    let html = `<div class="dash-timeline__time-col">${timeColHTML}</div>`;
+
+    // Barber columns
+    BARBEROS.forEach(barbero => {
+        let colHTML = '';
+        // Background slots
+        for (let h = HOURS_START; h <= HOURS_END; h++) {
+            colHTML += `<div class="dash-timeline__slot-bg"></div>`;
+        }
+
+        // Appointments for this barber
+        const barberCitas = citasState
+            .filter(c => c.barbero_id === barbero.id && c.estado !== 'cancelada' && c.fecha === selectedDateKey)
+            .sort(byStartTime);
+        barberCitas.forEach(cita => {
+            const startMin = timeToMinutes(cita.hora_inicio);
+            const endMin = timeToMinutes(cita.hora_fin);
+            const topPx = ((startMin - HOURS_START * 60) / 60) * SLOT_HEIGHT;
+            const heightPx = ((endMin - startMin) / 60) * SLOT_HEIGHT;
+            colHTML += appointmentHTML(cita, topPx, heightPx);
+        });
+
+        html += `<div class="dash-timeline__barber-col" data-barber="${barbero.id}">${colHTML}</div>`;
+    });
+
+    container.innerHTML = html;
+}
+
+// ─── Render Both Timelines ─────────────────────────────
+function renderTimeline() {
+    renderSingleTimeline();
+    renderMultiTimeline();
+}
+
+// ─── Barber Selector (mobile) ──────────────────────────
+document.getElementById('barber-selector').addEventListener('click', () => {
+    // Cycle through barbers
+    const idx = BARBEROS.findIndex(b => b.id === selectedBarberId);
+    const nextIdx = (idx + 1) % BARBEROS.length;
+    selectedBarberId = BARBEROS[nextIdx].id;
+    const barber = BARBEROS[nextIdx];
+
+    document.getElementById('selected-barber-name').textContent = barber.nombre;
+    document.getElementById('selected-barber-avatar').src = `/static/img/${barber.avatar}`;
+    renderSingleTimeline();
+});
+
+// ─── View Toggle ───────────────────────────────────────
+document.querySelectorAll('.dash-view-toggle__btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.dash-view-toggle__btn').forEach(b => b.classList.remove('dash-view-toggle__btn--active'));
+        btn.classList.add('dash-view-toggle__btn--active');
+        
+        const view = btn.dataset.view;
+        currentView = view;
+
+        const singleEl = document.getElementById('timeline-single');
+        const multiEl = document.getElementById('timeline-multi');
+        const multiHeader = document.getElementById('multi-header');
+        const barberSel = document.getElementById('barber-selector');
+
+        if (view === 'multi') {
+            singleEl.style.display = 'none';
+            multiEl.style.display = 'flex';
+            multiHeader.style.display = 'flex';
+            barberSel.style.display = 'none';
+        } else {
+            singleEl.style.display = 'block';
+            multiEl.style.display = 'none';
+            multiHeader.style.display = 'none';
+            barberSel.style.display = 'flex';
+        }
+    });
+});
+
+// ─── Today Button ──────────────────────────────────────
+document.getElementById('today-btn').addEventListener('click', () => {
+    selectedDate = new Date();
+    renderWeek();
+    renderTimeline();
+});
+
+// ─── Month Selector ───────────────────────────────────
+const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+function updateMonthDisplay() {
+    const monthEl = document.getElementById('current-month');
+    if (monthEl) {
+        const month = monthNames[selectedDate.getMonth()];
+        const year = selectedDate.getFullYear();
+        monthEl.textContent = `${month}, ${year}`;
+    }
+}
+
+function renderMonthPickerModal() {
+    const monthsEl = document.getElementById('month-picker-months');
+    const yearEl = document.getElementById('month-picker-year-display');
+    if (!monthsEl || !yearEl) return;
+    
+    const currentYear = selectedDate.getFullYear();
+    const currentMonth = selectedDate.getMonth();
+    
+    yearEl.textContent = currentYear;
+    monthsEl.innerHTML = '';
+    
+    monthNames.forEach((name, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = name.slice(0, 3);
+        btn.className = 'month-picker-modal__month-btn';
+        if (idx === currentMonth) {
+            btn.classList.add('active');
+        }
+        btn.addEventListener('click', () => {
+            setSelectedYearMonth(currentYear, idx);
+            updateMonthDisplay();
+            renderMonthPickerModal();
+            renderWeek();
+            renderTimeline();
+        });
+        monthsEl.appendChild(btn);
+    });
+}
+
+document.getElementById('month-selector').addEventListener('click', () => {
+    const modal = document.getElementById('month-picker-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        renderMonthPickerModal();
+    }
+});
+
+const monthPickerModal = document.getElementById('month-picker-modal');
+if (monthPickerModal) {
+    monthPickerModal.addEventListener('click', (e) => {
+        if (e.target.id === 'month-picker-modal' || e.target.className.includes('month-picker-modal__backdrop')) {
+            monthPickerModal.style.display = 'none';
+        }
+    });
+}
+
+document.getElementById('month-picker-close')?.addEventListener('click', () => {
+    monthPickerModal.style.display = 'none';
+});
+
+document.getElementById('month-picker-today')?.addEventListener('click', () => {
+    selectedDate = new Date();
+    updateMonthDisplay();
+    renderMonthPickerModal();
+    renderWeek();
+    renderTimeline();
+    monthPickerModal.style.display = 'none';
+});
+
+document.getElementById('month-picker-prev-year')?.addEventListener('click', () => {
+    setSelectedYearMonth(selectedDate.getFullYear() - 1, selectedDate.getMonth());
+    renderMonthPickerModal();
+});
+
+document.getElementById('month-picker-next-year')?.addEventListener('click', () => {
+    setSelectedYearMonth(selectedDate.getFullYear() + 1, selectedDate.getMonth());
+    renderMonthPickerModal();
+});
+
+document.getElementById('week-prev')?.addEventListener('click', () => {
+    shiftWeek(-1);
+});
+
+document.getElementById('week-next')?.addEventListener('click', () => {
+    shiftWeek(1);
+});
+
+// Initialize month display
+updateMonthDisplay();
+
+// ─── Bottom Nav Active State ───────────────────────────
+document.querySelectorAll('.dash-nav-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+        if (item.id === 'nav-salir') {
+            return;
+        }
+        e.preventDefault();
+        document.querySelectorAll('.dash-nav-item').forEach(n => n.classList.remove('dash-nav-item--active'));
+        item.classList.add('dash-nav-item--active');
+
+        const inAgenda = item.id === 'nav-agenda';
+        const inClientes = item.id === 'nav-clientes';
+        const inCatalogo = item.id === 'nav-catalogo';
+        const inServicio = item.id === 'nav-servicio';
+
+        const agendaBlocks = ['admin-barberos-module', 'dash-ops', 'dash-header', 'barber-selector', 'multi-header', 'timeline-single', 'timeline-multi'];
+        agendaBlocks.forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.style.display = inAgenda ? '' : 'none';
+        });
+
+        const clientsSection = document.getElementById('dash-clients');
+        if (clientsSection) clientsSection.style.display = inClientes ? 'block' : 'none';
+
+        const catalogSection = document.getElementById('dash-catalog');
+        if (catalogSection) catalogSection.style.display = inCatalogo ? 'block' : 'none';
+
+        const serviceSection = document.getElementById('dash-service');
+        if (serviceSection) serviceSection.style.display = inServicio ? 'block' : 'none';
+
+        if (inClientes && IS_ADMIN) {
+            renderClientsAnalytics();
+        }
+
+        if (inCatalogo && IS_ADMIN) {
+            renderCatalogList();
+        }
+
+        if (inServicio && IS_BARBER) {
+            loadBarberoServiceData();
+        }
+    });
+});
+
+async function loadBarberoServiceData() {
+    const profileState = document.getElementById('dash-service-profile-state');
+    const list = document.getElementById('dash-service-list');
+    const msg = document.getElementById('dash-service-msg');
+    if (!profileState || !list || !msg) return;
+
+    const response = await fetch('/api/barbero/servicio');
+    const data = await response.json();
+    if (!response.ok) {
+        msg.textContent = data.error || 'No se pudo cargar la configuración de servicio.';
+        msg.className = 'dash-ops__msg dash-ops__msg--error';
+        return;
+    }
+
+    const isActive = !!data.barbero?.activo;
+    profileState.textContent = isActive ? 'Perfil activo para reservas' : 'Perfil inactivo (no aparecerá en reservas)';
+
+    const rows = data.excepciones || [];
+    if (!rows.length) {
+        list.innerHTML = '<p class="dash-catalog__empty">No hay configuraciones pendientes.</p>';
+        return;
+    }
+
+    list.innerHTML = rows.map((row) => `
+        <article class="dash-service__row">
+            <div>
+                <strong>${row.fecha}</strong>
+                <p>${row.tipo === 'off' ? 'Descanso' : `Horario temporal ${row.hora_inicio} - ${row.hora_fin}`}</p>
+                <p>${row.motivo || 'Sin motivo'}</p>
+            </div>
+            <button type="button" data-service-remove="${row.id}">Eliminar</button>
+        </article>
+    `).join('');
+}
+
+function setupBarberoService() {
+    if (!IS_BARBER) return;
+
+    const msg = document.getElementById('dash-service-msg');
+    const offForm = document.getElementById('dash-service-off-form');
+    const temporalForm = document.getElementById('dash-service-temporal-form');
+    const toggleProfileBtn = document.getElementById('dash-service-toggle-profile');
+    const list = document.getElementById('dash-service-list');
+    if (!msg || !offForm || !temporalForm || !toggleProfileBtn || !list) return;
+
+    const setMsg = (text, isError = false) => {
+        msg.textContent = text;
+        msg.className = isError ? 'dash-ops__msg dash-ops__msg--error' : 'dash-ops__msg dash-ops__msg--ok';
+    };
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    offForm.fecha_inicio.value = todayIso;
+    offForm.fecha_fin.value = todayIso;
+    temporalForm.fecha_inicio.value = todayIso;
+    temporalForm.fecha_fin.value = todayIso;
+    temporalForm.hora_inicio.value = '09:00';
+    temporalForm.hora_fin.value = '18:00';
+
+    toggleProfileBtn.addEventListener('click', async () => {
+        const stateText = document.getElementById('dash-service-profile-state')?.textContent || '';
+        const willActivate = stateText.toLowerCase().includes('inactivo');
+        const approved = await openCenterConfirm(willActivate ? '¿Activar perfil para recibir reservas?' : '¿Desactivar perfil para ocultarte de reservas?');
+        if (!approved) return;
+
+        const response = await fetch('/api/barbero/servicio/perfil', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activo: willActivate }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo actualizar el estado de perfil.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Estado actualizado.');
+        await loadBarberoServiceData();
+    });
+
+    offForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(offForm).entries());
+        const response = await fetch('/api/barbero/servicio/descanso', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo aplicar el descanso.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Descanso aplicado.');
+        showCenterFeedback(data.message || 'Descanso aplicado.');
+        await loadBarberoServiceData();
+    });
+
+    temporalForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(temporalForm).entries());
+        const response = await fetch('/api/barbero/servicio/horario-temporal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo aplicar el horario temporal.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Horario temporal aplicado.');
+        showCenterFeedback(data.message || 'Horario temporal aplicado.');
+        await loadBarberoServiceData();
+    });
+
+    list.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-service-remove]');
+        if (!btn) return;
+
+        const configId = Number(btn.dataset.serviceRemove);
+        const approved = await openCenterConfirm('¿Eliminar esta configuración de servicio?');
+        if (!approved) return;
+
+        const response = await fetch(`/api/barbero/servicio/excepcion/${configId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo eliminar la configuración.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Configuración eliminada.');
+        await loadBarberoServiceData();
+    });
+}
+
+function renderBarChart(containerId, rows, keyField, valueField) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!rows.length) {
+        container.innerHTML = '<p class="dash-chart__empty">Sin datos para mostrar.</p>';
+        return;
+    }
+
+    const max = Math.max(...rows.map(r => Number(r[valueField] || 0)), 1);
+    container.innerHTML = rows.map((row) => {
+        const value = Number(row[valueField] || 0);
+        const pct = Math.max(8, Math.round((value / max) * 100));
+        return `<div class="dash-chart__row"><span>${row[keyField]}</span><div class="dash-chart__bar"><i style="width:${pct}%"></i></div><strong>${value}</strong></div>`;
+    }).join('');
+}
+
+function renderClientsAnalytics() {
+    const cards = document.getElementById('dash-clients-cards');
+    const history = document.getElementById('dash-history-list');
+    if (!cards || !history) return;
+
+    const citas = [...citasState];
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+    const monthAgo = new Date(now);
+    monthAgo.setMonth(now.getMonth() - 1);
+
+    const byClientWeek = new Set();
+    const byClientMonth = new Set();
+    const dayCount = {};
+    const monthCount = {};
+
+    citas.forEach((c) => {
+        const dt = new Date(`${c.fecha}T00:00:00`);
+        const clientName = c.cliente || 'Cliente';
+        if (dt >= weekAgo) byClientWeek.add(clientName);
+        if (dt >= monthAgo) byClientMonth.add(clientName);
+
+        const dayName = dt.toLocaleDateString('es-CO', { weekday: 'long' });
+        dayCount[dayName] = (dayCount[dayName] || 0) + 1;
+
+        const monthName = dt.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+        monthCount[monthName] = (monthCount[monthName] || 0) + 1;
+    });
+
+    const dayRows = Object.entries(dayCount).map(([dia, total]) => ({ dia, total })).sort((a, b) => b.total - a.total);
+    const monthRows = Object.entries(monthCount).map(([mes, total]) => ({ mes, total })).sort((a, b) => b.total - a.total);
+
+    const mostActive = dayRows[0]?.dia || '-';
+    const leastActive = dayRows[dayRows.length - 1]?.dia || '-';
+
+    cards.innerHTML = `
+        <article class="dash-kpi-card"><h4>Clientes (7 días)</h4><p>${byClientWeek.size}</p></article>
+        <article class="dash-kpi-card"><h4>Clientes (30 días)</h4><p>${byClientMonth.size}</p></article>
+        <article class="dash-kpi-card"><h4>Día más activo</h4><p>${mostActive}</p></article>
+        <article class="dash-kpi-card"><h4>Día más bajo</h4><p>${leastActive}</p></article>
+    `;
+
+    renderBarChart('chart-daily', dayRows, 'dia', 'total');
+    renderBarChart('chart-monthly', monthRows, 'mes', 'total');
+
+    const rows = citas
+        .sort((a, b) => (b.fecha + b.hora_inicio).localeCompare(a.fecha + a.hora_inicio))
+        .slice(0, 20);
+
+    history.innerHTML = rows.map((c) => `
+        <div class="dash-history-item">
+            <div class="dash-history-item__head">
+                <strong>${c.cliente}</strong>
+                <span class="dash-history-item__status dash-history-item__status--${getStatusClass(c.estado)}">${c.estado}</span>
+            </div>
+            <span>${c.fecha} · ${c.hora_inicio} - ${c.hora_fin}</span>
+            <span>${c.servicio}</span>
+        </div>
+    `).join('');
+}
+
+async function renderCatalogList() {
+    const list = document.getElementById('catalog-list');
+    const msg = document.getElementById('catalog-msg');
+    if (!list || !msg) return;
+
+    const response = await fetch('/api/admin/catalogo');
+    const data = await response.json();
+    if (!response.ok) {
+        msg.textContent = data.error || 'No se pudo cargar catálogo.';
+        msg.className = 'dash-ops__msg dash-ops__msg--error';
+        return;
+    }
+
+    catalogItemsState = data;
+    list.innerHTML = data.map((item) => `
+        <article class="dash-catalog-item">
+            <div class="dash-catalog-item__media">
+                ${item.imagen_url ? `<img src="${item.imagen_url}" alt="${item.nombre}">` : '<div class="dash-catalog-item__placeholder">Sin imagen</div>'}
+            </div>
+            <div class="dash-catalog-item__content">
+                <h4>${item.nombre}</h4>
+                <p class="dash-catalog-item__id">ID: ${item.id_item}</p>
+                <p class="dash-catalog-item__desc">${item.detalles || 'Sin detalles'}</p>
+                <p class="dash-catalog-item__meta">Precio: $${Number(item.precio || 0).toLocaleString('es-CO')} · Stock: ${item.stock}</p>
+            </div>
+            <div class="dash-catalog-item__actions">
+                <button type="button" data-act="edit" data-id="${item.id}">Editar</button>
+                <button type="button" data-act="delete" data-id="${item.id}">Eliminar</button>
+            </div>
+        </article>
+    `).join('');
+}
+
+function setupCatalogoAdmin() {
+    const form = document.getElementById('catalog-form');
+    const formWrap = document.getElementById('catalog-form-wrap');
+    const list = document.getElementById('catalog-list');
+    const msg = document.getElementById('catalog-msg');
+    const openCreateBtn = document.getElementById('catalog-open-create');
+    const editId = document.getElementById('catalog-edit-id');
+    const imageHidden = document.getElementById('catalog-imagen');
+    const imageFile = document.getElementById('catalog-image-file');
+    const imageUploadBtn = document.getElementById('catalog-image-upload-btn');
+    const imagePreview = document.getElementById('catalog-image-preview');
+    const submit = document.getElementById('catalog-submit');
+    const cancel = document.getElementById('catalog-cancel');
+    if (!form || !list || !msg) return;
+
+    const setMsg = (text, isError = false) => {
+        msg.textContent = text;
+        msg.className = isError ? 'dash-ops__msg dash-ops__msg--error' : 'dash-ops__msg dash-ops__msg--ok';
+    };
+
+    const resetForm = () => {
+        form.reset();
+        editId.value = '';
+        imageHidden.value = '';
+        if (imagePreview) imagePreview.src = '/static/img/logo.png';
+        submit.textContent = 'Agregar artículo';
+        if (openCreateBtn) {
+            openCreateBtn.textContent = 'Registrar producto';
+        }
+    };
+
+    const hideForm = () => {
+        if (formWrap) {
+            formWrap.classList.add('dash-catalog__form-wrap--hidden');
+        }
+        resetForm();
+    };
+
+    const showCreateForm = () => {
+        if (formWrap) {
+            formWrap.classList.remove('dash-catalog__form-wrap--hidden');
+        }
+        resetForm();
+        if (openCreateBtn) {
+            openCreateBtn.textContent = 'Ocultar formulario';
+        }
+    };
+
+    const showEditForm = () => {
+        if (formWrap) {
+            formWrap.classList.remove('dash-catalog__form-wrap--hidden');
+        }
+        if (openCreateBtn) {
+            openCreateBtn.textContent = 'Ocultar formulario';
+        }
+    };
+
+    openCreateBtn?.addEventListener('click', () => {
+        if (formWrap?.classList.contains('dash-catalog__form-wrap--hidden')) {
+            showCreateForm();
+        } else {
+            hideForm();
+        }
+    });
+
+    imageUploadBtn?.addEventListener('click', async () => {
+        const file = imageFile?.files?.[0];
+        if (!file) {
+            setMsg('Selecciona una imagen antes de subirla.', true);
+            return;
+        }
+
+        const body = new FormData();
+        body.append('imagen', file);
+        const response = await fetch('/api/admin/catalogo/imagen', { method: 'POST', body });
+        const data = await response.json();
+
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo subir la imagen.', true);
+            return;
+        }
+
+        imageHidden.value = data.imagen || '';
+        if (imagePreview && data.imagen_url) {
+            imagePreview.src = data.imagen_url;
+        }
+        setMsg(data.message || 'Imagen subida correctamente.');
+        showCenterFeedback(data.message || 'Imagen subida correctamente.');
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(form).entries());
+        payload.precio = Number(payload.precio || 0);
+        payload.stock = Number(payload.stock || 0);
+
+        const isEdit = Boolean(editId.value);
+        const url = isEdit ? `/api/admin/catalogo/${editId.value}` : '/api/admin/catalogo';
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo guardar el artículo.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Artículo guardado correctamente.');
+        showCenterFeedback(data.message || 'Artículo guardado correctamente.');
+        hideForm();
+        await renderCatalogList();
+    });
+
+    cancel.addEventListener('click', hideForm);
+
+    list.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+        const itemId = Number(btn.dataset.id);
+        const action = btn.dataset.act;
+
+        if (action === 'edit') {
+            const item = catalogItemsState.find(x => Number(x.id) === itemId);
+            if (!item) return;
+
+            editId.value = item.id;
+            document.getElementById('catalog-id-item').value = item.id_item || '';
+            document.getElementById('catalog-nombre').value = item.nombre || '';
+            document.getElementById('catalog-precio').value = item.precio ?? 0;
+            document.getElementById('catalog-stock').value = item.stock ?? 0;
+            document.getElementById('catalog-detalles').value = item.detalles || '';
+            imageHidden.value = item.imagen || '';
+            if (imagePreview) {
+                imagePreview.src = item.imagen_url || '/static/img/logo.png';
+            }
+            submit.textContent = 'Actualizar artículo';
+            showEditForm();
+            return;
+        }
+
+        const approved = await openCenterConfirm('¿Eliminar este artículo del catálogo?');
+        if (!approved) return;
+
+        const response = await fetch(`/api/admin/catalogo/${itemId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo eliminar el artículo.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Artículo eliminado correctamente.');
+        showCenterFeedback(data.message || 'Artículo eliminado correctamente.');
+        await renderCatalogList();
+    });
+
+    renderCatalogList();
+}
+
+async function renderPortfolioList() {
+    const list = document.getElementById('portfolio-list');
+    const msg = document.getElementById('portfolio-msg');
+    if (!list || !msg) return;
+
+    const response = await fetch('/api/admin/portafolio');
+    const data = await response.json();
+    if (!response.ok) {
+        msg.textContent = data.error || 'No se pudo cargar el portafolio.';
+        msg.className = 'dash-ops__msg dash-ops__msg--error';
+        return;
+    }
+
+    portfolioImagesState = data;
+    if (!data.length) {
+        list.innerHTML = '<p class="dash-catalog__empty">Aún no hay imágenes en el portafolio.</p>';
+        return;
+    }
+
+    list.innerHTML = data.map((item, idx) => `
+        <article class="dash-catalog-item dash-catalog-item--portfolio">
+            <div class="dash-catalog-item__media">
+                <img src="${item.imagen_url}" alt="Imagen portafolio ${item.id}">
+            </div>
+            <div class="dash-catalog-item__content">
+                <h4>Imagen #${item.id}</h4>
+                <p class="dash-catalog-item__id">Posición: ${item.sort_order || '-'}</p>
+                <p class="dash-catalog-item__desc">Subida para mostrarse en el portafolio público.</p>
+            </div>
+            <div class="dash-catalog-item__actions">
+                <button type="button" data-act="move-up-portfolio" data-id="${item.id}" ${idx === 0 ? 'disabled' : ''}>Subir</button>
+                <button type="button" data-act="move-down-portfolio" data-id="${item.id}" ${idx === data.length - 1 ? 'disabled' : ''}>Bajar</button>
+                <button type="button" data-act="delete-portfolio" data-id="${item.id}">Eliminar</button>
+            </div>
+        </article>
+    `).join('');
+}
+
+function setupPortfolioAdmin() {
+    const form = document.getElementById('portfolio-form');
+    const list = document.getElementById('portfolio-list');
+    const msg = document.getElementById('portfolio-msg');
+    const fileInput = document.getElementById('portfolio-image-file');
+    const preview = document.getElementById('portfolio-image-preview');
+    if (!form || !list || !msg || !fileInput || !preview) return;
+
+    const setMsg = (text, isError = false) => {
+        msg.textContent = text;
+        msg.className = isError ? 'dash-ops__msg dash-ops__msg--error' : 'dash-ops__msg dash-ops__msg--ok';
+    };
+
+    fileInput.addEventListener('change', () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        const objectUrl = URL.createObjectURL(file);
+        preview.src = objectUrl;
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const file = fileInput.files?.[0];
+        if (!file) {
+            setMsg('Selecciona una imagen antes de subirla.', true);
+            return;
+        }
+
+        const body = new FormData();
+        body.append('imagen', file);
+
+        const response = await fetch('/api/admin/portafolio', {
+            method: 'POST',
+            body,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo subir la imagen.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Imagen agregada al portafolio.');
+        showCenterFeedback(data.message || 'Imagen agregada al portafolio.');
+        form.reset();
+        preview.src = '/static/img/logo_icy.jpeg';
+        await renderPortfolioList();
+    });
+
+    list.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+
+        const action = btn.dataset.act;
+        const imageId = Number(btn.dataset.id);
+
+        if (action === 'move-up-portfolio' || action === 'move-down-portfolio') {
+            const response = await fetch(`/api/admin/portafolio/${imageId}/orden`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ direction: action === 'move-up-portfolio' ? 'up' : 'down' }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                setMsg(data.error || 'No se pudo actualizar el orden.', true);
+                return;
+            }
+
+            setMsg(data.message || 'Orden actualizado.');
+            await renderPortfolioList();
+            return;
+        }
+
+        if (action !== 'delete-portfolio') return;
+        const approved = await openCenterConfirm('¿Eliminar esta imagen del portafolio?');
+        if (!approved) return;
+
+        const response = await fetch(`/api/admin/portafolio/${imageId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo eliminar la imagen.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Imagen eliminada del portafolio.');
+        showCenterFeedback(data.message || 'Imagen eliminada del portafolio.');
+        await renderPortfolioList();
+    });
+
+    renderPortfolioList();
+}
+
+function setupCatalogTabs() {
+    const tabsWrap = document.getElementById('dash-catalog-tabs');
+    const tabs = tabsWrap ? Array.from(tabsWrap.querySelectorAll('[data-catalog-tab]')) : [];
+    const panelProductos = document.getElementById('catalog-panel-productos');
+    const panelPortafolio = document.getElementById('catalog-panel-portafolio');
+    const createBtn = document.getElementById('catalog-open-create');
+    if (!tabs.length || !panelProductos || !panelPortafolio || !createBtn) return;
+
+    const switchTab = (name) => {
+        const isProductos = name === 'productos';
+        tabs.forEach((tab) => tab.classList.toggle('dash-catalog__tab--active', tab.dataset.catalogTab === name));
+        panelProductos.style.display = isProductos ? '' : 'none';
+        panelPortafolio.style.display = isProductos ? 'none' : '';
+        createBtn.style.display = isProductos ? '' : 'none';
+
+        if (!isProductos) {
+            renderPortfolioList();
+        }
+    };
+
+    tabs.forEach((tab) => {
+        tab.addEventListener('click', () => switchTab(tab.dataset.catalogTab));
+    });
+}
+
+// ─── Init ──────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    const singleBtnText = document.getElementById('view-single-btn');
+    if (singleBtnText) {
+        singleBtnText.textContent = 'Barbero';
+    }
+
+    if (BARBEROS.length > 0) {
+        selectedBarberId = BARBEROS[0].id;
+        document.getElementById('selected-barber-name').textContent = BARBEROS[0].nombre;
+        document.getElementById('selected-barber-avatar').src = `/static/img/${BARBEROS[0].avatar}`;
+    }
+
+    renderWeek();
+    renderTimeline();
+
+    // Default to single view on mobile and for barber role
+    if (IS_BARBER || window.innerWidth <= 768) {
+        document.querySelector('[data-view="single"]').click();
+        const multiHeader = document.getElementById('multi-header');
+        if (multiHeader) multiHeader.style.display = 'none';
+    } else {
+        const multiBtn = document.querySelector('[data-view="multi"]');
+        if (multiBtn) {
+            multiBtn.click();
+        } else {
+            document.querySelector('[data-view="single"]').click();
+        }
+    }
+
+    const confirmAccept = document.getElementById('center-confirm-accept');
+    const confirmCancel = document.getElementById('center-confirm-cancel');
+    const confirmWrap = document.getElementById('center-confirm');
+    if (confirmAccept) confirmAccept.addEventListener('click', () => closeCenterConfirm(true));
+    if (confirmCancel) confirmCancel.addEventListener('click', () => closeCenterConfirm(false));
+    if (confirmWrap) {
+        confirmWrap.addEventListener('click', (e) => {
+            if (e.target.id === 'center-confirm') {
+                closeCenterConfirm(false);
+            }
+        });
+    }
+
+    if (IS_ADMIN) {
+        setupAdminBarberos();
+        setupCatalogoAdmin();
+        setupPortfolioAdmin();
+        setupCatalogTabs();
+        renderClientsAnalytics();
+    }
+
+    if (IS_BARBER) {
+        setupBarberoService();
+        loadBarberoServiceData();
+    }
+
+    setupCitasOps();
+});
+
+// ─── Admin CRUD Barberos ─────────────────────────────
+function setupAdminBarberos() {
+    const form = document.getElementById('admin-barbero-form');
+    const list = document.getElementById('admin-barberos-list');
+    const msg = document.getElementById('admin-barberos-msg');
+    const editIdInput = document.getElementById('barbero-edit-id');
+    const cancelBtn = document.getElementById('admin-barbero-cancel');
+    const submitBtn = document.getElementById('admin-barbero-submit');
+    const openCreateBtn = document.getElementById('admin-open-create');
+    const avatarFileInput = document.getElementById('avatar-file');
+    const avatarUploadBtn = document.getElementById('avatar-upload-btn');
+    const avatarPreview = document.getElementById('avatar-preview');
+    const avatarHidden = document.getElementById('avatar-hidden');
+    const telefonoInput = document.getElementById('telefono');
+
+    if (!form || !list || !msg) return;
+
+    const getSelectedDays = () => Array.from(document.querySelectorAll('#admin-days-group input[type="checkbox"]:checked')).map(el => Number(el.value));
+    const setSelectedDays = (days) => {
+        const selected = new Set((days || []).map(Number));
+        document.querySelectorAll('#admin-days-group input[type="checkbox"]').forEach(el => {
+            el.checked = selected.has(Number(el.value));
+        });
+    };
+
+    const resetEdit = () => {
+        form.reset();
+        editIdInput.value = '';
+        submitBtn.textContent = 'Guardar barbero';
+        msg.textContent = '';
+        avatarHidden.value = 'camilo.jpg';
+        avatarPreview.src = '/static/img/camilo.jpg';
+        setSelectedDays([1,2,3,4,5]);
+        openCreateBtn.textContent = 'Registrar barbero';
+    };
+
+    const hideForm = () => {
+        form.classList.add('admin-barberos__form--hidden');
+        resetEdit();
+    };
+
+    const showFormCreate = () => {
+        form.classList.remove('admin-barberos__form--hidden');
+        resetEdit();
+        submitBtn.textContent = 'Crear barbero';
+        openCreateBtn.textContent = 'Ocultar formulario';
+    };
+
+    const setMsg = (text, isError = false) => {
+        msg.textContent = text;
+        msg.className = isError ? 'admin-barberos__msg admin-barberos__msg--error' : 'admin-barberos__msg admin-barberos__msg--ok';
+    };
+
+    // Validaciones
+    const validateTelefono = (tel) => {
+        const cleaned = tel.replace(/\D/g, '');
+        if (cleaned.length !== 10) return 'El teléfono debe tener exactamente 10 dígitos.';
+        return null;
+    };
+
+    const validateEmail = (email) => {
+        const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!regex.test(email)) return 'El correo debe tener un formato válido (ej: usuario@dominio.com).';
+        return null;
+    };
+
+    const validatePassword = (pwd) => {
+        if (pwd.length < 8) return 'La contraseña debe tener al menos 8 caracteres.';
+        if (!/[A-Z]/.test(pwd)) return 'La contraseña debe incluir al menos una mayúscula.';
+        if (!/[a-z]/.test(pwd)) return 'La contraseña debe incluir al menos una minúscula.';
+        if (!/\d/.test(pwd)) return 'La contraseña debe incluir al menos un número.';
+        if (!/[!@#$%^&*.]/.test(pwd)) return 'La contraseña debe incluir al menos un carácter especial (incluye ., !, @, #, $, %, ^, &, *).';
+        return null;
+    };
+
+    // Phone mask is automatically applied via data-phone-mask attribute
+
+    document.querySelectorAll('.admin-password-toggle').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const input = document.getElementById(btn.dataset.target);
+            if (!input) return;
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            
+            const eye = btn.querySelector('.password-eye');
+            const eyeSlash = btn.querySelector('.password-eye-slash');
+            if (eye) eye.style.display = isPassword ? 'none' : 'block';
+            if (eyeSlash) eyeSlash.style.display = isPassword ? 'block' : 'none';
+        });
+    });
+
+    const renderList = async () => {
+        const response = await fetch('/api/admin/barberos');
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo cargar la lista de barberos.', true);
+            return;
+        }
+
+        list.innerHTML = data.map(item => `
+            <article class="admin-barbero-card ${item.activo ? '' : 'is-inactive'}">
+                <div>
+                    <div class="admin-barbero-card__main">
+                        <img src="${item.avatar_url}" alt="${item.nombre}">
+                        <div>
+                            <strong>${item.nombre}</strong>
+                            <p>${item.telefono || ''} ${item.email ? '· ' + item.email : ''}</p>
+                            <p>Horario: ${item.dias_trabajo || '-'} ${item.hora_inicio || ''} ${item.hora_fin ? '- ' + item.hora_fin : ''}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="admin-barbero-card__actions">
+                    <button type="button" data-action="edit" data-id="${item.id}">Editar</button>
+                    <button type="button" data-action="deactivate" data-id="${item.id}">Desactivar</button>
+                    <button type="button" data-action="remove" data-id="${item.id}">Eliminar</button>
+                </div>
+            </article>
+        `).join('');
+
+        BARBEROS.splice(0, BARBEROS.length, ...data.filter(x => x.activo));
+        renderTimeline();
+    };
+
+    avatarUploadBtn.addEventListener('click', async () => {
+        const file = avatarFileInput.files?.[0];
+        if (!file) {
+            setMsg('Selecciona una imagen antes de subir.', true);
+            return;
+        }
+
+        const body = new FormData();
+        body.append('avatar', file);
+
+        const response = await fetch('/api/admin/barberos/avatar', { method: 'POST', body });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo subir la imagen.', true);
+            return;
+        }
+
+        avatarHidden.value = data.avatar;
+        avatarPreview.src = data.avatar_url;
+        setMsg('Imagen subida correctamente.');
+        showCenterFeedback('Imagen subida correctamente.');
+    });
+
+    openCreateBtn.addEventListener('click', () => {
+        if (form.classList.contains('admin-barberos__form--hidden')) {
+            showFormCreate();
+        } else {
+            hideForm();
+        }
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(form).entries());
+        payload.dias_semana = getSelectedDays();
+
+        // Validación de nombre y apellido no requeridos aquí (validados en HTML)
+        if (!payload.nombre || !payload.telefono || !payload.email || !payload.username) {
+            setMsg('Nombre, teléfono, correo y usuario son obligatorios.', true);
+            return;
+        }
+
+        // Validar teléfono
+        const telError = validateTelefono(payload.telefono);
+        if (telError) {
+            setMsg(telError, true);
+            return;
+        }
+
+        // Validar email
+        const emailError = validateEmail(payload.email);
+        if (emailError) {
+            setMsg(emailError, true);
+            return;
+        }
+
+        const isEditing = !!editIdInput.value;
+
+        // Si es creación o si se está cambiando la contraseña
+        if (!isEditing || payload.password_temporal) {
+            if (!payload.password_temporal || !payload.password_confirmacion) {
+                setMsg('La contraseña y su confirmación son obligatorias.', true);
+                return;
+            }
+
+            // Validar contraseña
+            const pwdError = validatePassword(payload.password_temporal);
+            if (pwdError) {
+                setMsg(pwdError, true);
+                return;
+            }
+
+            if (payload.password_temporal !== payload.password_confirmacion) {
+                setMsg('La confirmación de contraseña no coincide.', true);
+                return;
+            }
+        } else if (isEditing) {
+            // Si es edición sin cambio de contraseña, no validar
+            if (payload.password_temporal) {
+                const pwdError = validatePassword(payload.password_temporal);
+                if (pwdError) {
+                    setMsg(pwdError, true);
+                    return;
+                }
+            }
+        }
+
+        const url = isEditing ? `/api/admin/barberos/${editIdInput.value}` : '/api/admin/barberos';
+        const method = isEditing ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo guardar el barbero.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Barbero guardado correctamente.');
+        showCenterFeedback(data.message || (isEditing ? 'Cambios realizados correctamente.' : 'Barbero registrado correctamente.'));
+        hideForm();
+        await renderList();
+    });
+
+    cancelBtn.addEventListener('click', hideForm);
+
+    list.addEventListener('click', async (e) => {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        const barberoId = button.dataset.id;
+
+        if (action === 'deactivate') {
+            const approved = await openCenterConfirm('¿Desactivar este barbero?');
+            if (!approved) return;
+            const response = await fetch(`/api/admin/barberos/${barberoId}`, { method: 'DELETE' });
+            const data = await response.json();
+            if (!response.ok) {
+                setMsg(data.error || 'No se pudo desactivar el barbero.', true);
+                return;
+            }
+            setMsg(data.message || 'Barbero desactivado.');
+            showCenterFeedback(data.message || 'Barbero desactivado correctamente.');
+            await renderList();
+            return;
+        }
+
+        if (action === 'remove') {
+            const approved = await openCenterConfirm('¿Eliminar permanentemente este barbero? Esta acción no se puede deshacer.');
+            if (!approved) return;
+            const response = await fetch(`/api/admin/barberos/${barberoId}?mode=delete`, { method: 'DELETE' });
+            const data = await response.json();
+            if (!response.ok) {
+                setMsg(data.error || 'No se pudo eliminar el barbero.', true);
+                return;
+            }
+            setMsg(data.message || 'Barbero eliminado.');
+            showCenterFeedback(data.message || 'Barbero eliminado correctamente.');
+            await renderList();
+            return;
+        }
+
+        if (action === 'edit') {
+            const response = await fetch('/api/admin/barberos');
+            const data = await response.json();
+            const barbero = data.find(x => String(x.id) === String(barberoId));
+            if (!barbero) {
+                setMsg('No se encontró el barbero para editar.', true);
+                return;
+            }
+
+            editIdInput.value = barbero.id;
+            form.nombre.value = barbero.nombre || '';
+            form.telefono.value = barbero.telefono || '';
+            form.email.value = barbero.email || '';
+            form.avatar.value = barbero.avatar || '';
+            avatarHidden.value = barbero.avatar || 'camilo.jpg';
+            avatarPreview.src = barbero.avatar_url || '/static/img/camilo.jpg';
+            form.username.value = barbero.username || '';
+            form.password_temporal.value = '';
+            form.password_confirmacion.value = '';
+            setSelectedDays(barbero.dias_semana || [1,2,3,4,5]);
+            form.hora_inicio.value = barbero.hora_inicio || '09:00';
+            form.hora_fin.value = barbero.hora_fin || '18:00';
+            submitBtn.textContent = 'Actualizar barbero';
+            form.classList.remove('admin-barberos__form--hidden');
+            openCreateBtn.textContent = 'Ocultar formulario';
+            setMsg(`Editando a ${barbero.nombre}`);
+        }
+    });
+
+    hideForm();
+    renderList();
+}
+
+// ─── Operaciones de Citas (admin/barbero) ────────────
+function setupCitasOps() {
+    const list = document.getElementById('dash-ops-list');
+    const msg = document.getElementById('dash-ops-msg');
+    const opsContent = document.getElementById('dash-ops-content');
+    const opsToggle = document.getElementById('dash-ops-toggle');
+    if (!list || !msg || !opsContent || !opsToggle) return;
+
+    const setOpsExpanded = (expanded) => {
+        opsContent.style.display = expanded ? 'block' : 'none';
+        opsToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        opsToggle.textContent = expanded ? 'Ocultar listado' : 'Mostrar listado';
+    };
+
+    setOpsExpanded(false);
+    opsToggle.addEventListener('click', () => {
+        const isExpanded = opsToggle.getAttribute('aria-expanded') === 'true';
+        setOpsExpanded(!isExpanded);
+    });
+
+    const setMsg = (text, isError = false) => {
+        msg.textContent = text;
+        msg.className = isError ? 'dash-ops__msg dash-ops__msg--error' : 'dash-ops__msg dash-ops__msg--ok';
+    };
+
+    const cardActions = (cita) => {
+        if (cita.estado === 'cancelada') {
+            if (IS_ADMIN) {
+                return `
+                    <div class="dash-ops__buttons">
+                        <span class="dash-ops__badge">Cancelada</span>
+                        <button data-act="eliminar" data-id="${cita.id}">Eliminar del historial</button>
+                    </div>
+                `;
+            }
+            return '<span class="dash-ops__badge">Cancelada</span>';
+        }
+        return `
+            <div class="dash-ops__buttons">
+                <button data-act="confirmar" data-id="${cita.id}">Confirmar</button>
+                <button data-act="completar" data-id="${cita.id}">Completar</button>
+                <button data-act="cancelar" data-id="${cita.id}">Cancelar</button>
+            </div>
+        `;
+    };
+
+    const render = () => {
+        const rows = [...citasState].sort((a, b) => (a.fecha + a.hora_inicio).localeCompare(b.fecha + b.hora_inicio));
+        list.innerHTML = rows.map(cita => `
+            <article class="dash-ops__card">
+                <div>
+                    <strong>${cita.cliente}</strong>
+                    <p>${cita.fecha} · ${cita.hora_inicio} - ${cita.hora_fin}</p>
+                    <p>${cita.servicio} · Estado: ${cita.estado}</p>
+                </div>
+                ${cardActions(cita)}
+            </article>
+        `).join('');
+    };
+
+    list.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+        e.preventDefault();
+
+        const citaId = btn.dataset.id;
+        const accion = btn.dataset.act;
+
+        if (accion === 'eliminar') {
+            const approved = await openCenterConfirm('¿Eliminar esta cita cancelada del historial?');
+            if (!approved) return;
+
+            const response = await fetch(`/api/admin/citas/${citaId}`, {
+                method: 'DELETE',
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                setMsg(data.error || 'No fue posible eliminar la cita.', true);
+                return;
+            }
+
+            citasState = citasState.filter(c => String(c.id) !== String(citaId));
+            setMsg(data.message || 'Cita eliminada del historial.');
+            render();
+            renderTimeline();
+            return;
+        }
+
+        let payload = { accion };
+
+        if (accion === 'cancelar') {
+            const approved = await openCenterConfirm('¿Cancelar esta cita?');
+            if (!approved) return;
+        }
+
+        const response = await fetch(`/api/citas/${citaId}/accion`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            setMsg(data.error || 'No fue posible actualizar la cita.', true);
+            return;
+        }
+
+        const idx = citasState.findIndex(c => String(c.id) === String(citaId));
+        if (idx >= 0) citasState[idx] = data.cita;
+        setMsg(data.message || 'Cita actualizada.');
+        render();
+        renderTimeline();
+    });
+
+    render();
+}
+</script>
+{% endblock %}
