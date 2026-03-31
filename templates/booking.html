@@ -392,6 +392,10 @@ const bookingState = {
     currentStep: 1
 };
 
+const DISPONIBILIDAD_CACHE_TTL_MS = 2 * 60 * 1000;
+const disponibilidadCache = new Map();
+const disponibilidadInFlight = new Map();
+
 const modal = document.getElementById('booking-modal');
 const detailsModal = document.getElementById('booking-details-modal');
 const modalServiceName = document.getElementById('modal-service-name');
@@ -532,10 +536,11 @@ function getAvailableBarbers(data = bookingState.disponibilidad) {
     return data.barberos.filter(b => (data.slots[String(b.id)] || []).length > 0);
 }
 
-async function fetchDisponibilidad() {
-    const response = await fetch(`/api/disponibilidad?servicio_id=${bookingState.currentServiceId}&fecha=${bookingState.currentDate}`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'No hay disponibilidad para esa fecha.');
+function getDisponibilidadCacheKey(servicioId, fecha) {
+    return `${Number(servicioId)}|${String(fecha)}`;
+}
+
+function applyDisponibilidad(data) {
     bookingState.disponibilidad = data;
 
     if (!Array.isArray(data.barberos) || data.barberos.length === 0) {
@@ -564,6 +569,37 @@ async function fetchDisponibilidad() {
     setModalStatus('', false);
     renderBarbers();
     renderSlots();
+}
+
+async function fetchDisponibilidad() {
+    const servicioId = bookingState.currentServiceId;
+    const fecha = bookingState.currentDate;
+    const cacheKey = getDisponibilidadCacheKey(servicioId, fecha);
+    const now = Date.now();
+    const cached = disponibilidadCache.get(cacheKey);
+
+    if (cached && (now - cached.ts) < DISPONIBILIDAD_CACHE_TTL_MS) {
+        applyDisponibilidad(cached.data);
+        return;
+    }
+
+    if (!disponibilidadInFlight.has(cacheKey)) {
+        const requestPromise = (async () => {
+            const response = await fetch(`/api/disponibilidad?servicio_id=${servicioId}&fecha=${fecha}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'No hay disponibilidad para esa fecha.');
+            disponibilidadCache.set(cacheKey, { ts: Date.now(), data });
+            return data;
+        })();
+        disponibilidadInFlight.set(cacheKey, requestPromise);
+    }
+
+    try {
+        const data = await disponibilidadInFlight.get(cacheKey);
+        applyDisponibilidad(data);
+    } finally {
+        disponibilidadInFlight.delete(cacheKey);
+    }
 }
 
 function updateProgress() {

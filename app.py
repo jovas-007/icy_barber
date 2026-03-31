@@ -666,6 +666,114 @@ def generate_available_slots(barbero_id, fecha_cita, duracion_minutos, step_minu
     return slots
 
 
+def get_effective_work_ranges_bulk(barbero_ids, fecha_cita):
+    if not barbero_ids:
+        return {}
+
+    dia_semana = fecha_cita.isoweekday()
+    horarios = (
+        HorarioBarbero.query
+        .filter(HorarioBarbero.barbero_id.in_(barbero_ids))
+        .filter(HorarioBarbero.dia_semana == dia_semana)
+        .filter(HorarioBarbero.activo == True)
+        .all()
+    )
+
+    schedule_ranges = {barbero_id: [] for barbero_id in barbero_ids}
+    for horario in horarios:
+        if horario.hora_fin > horario.hora_inicio:
+            schedule_ranges.setdefault(horario.barbero_id, []).append((horario.hora_inicio, horario.hora_fin))
+
+    overrides = (
+        ExcepcionDisponibilidadBarbero.query
+        .filter(ExcepcionDisponibilidadBarbero.barbero_id.in_(barbero_ids))
+        .filter(ExcepcionDisponibilidadBarbero.fecha == fecha_cita)
+        .filter(ExcepcionDisponibilidadBarbero.activo == True)
+        .order_by(ExcepcionDisponibilidadBarbero.id.desc())
+        .all()
+    )
+
+    latest_override_by_barbero = {}
+    for override in overrides:
+        if override.barbero_id not in latest_override_by_barbero:
+            latest_override_by_barbero[override.barbero_id] = override
+
+    effective_ranges = {}
+    for barbero_id in barbero_ids:
+        override = latest_override_by_barbero.get(barbero_id)
+        if not override:
+            effective_ranges[barbero_id] = schedule_ranges.get(barbero_id, [])
+            continue
+
+        if override.tipo == "off":
+            effective_ranges[barbero_id] = []
+        elif override.tipo == "horario" and override.hora_inicio and override.hora_fin and override.hora_fin > override.hora_inicio:
+            effective_ranges[barbero_id] = [(override.hora_inicio, override.hora_fin)]
+        else:
+            effective_ranges[barbero_id] = []
+
+    return effective_ranges
+
+
+def generate_available_slots_bulk(barbero_ids, fecha_cita, duracion_minutos, step_minutes=40):
+    if not barbero_ids:
+        return {}
+
+    ranges_by_barbero = get_effective_work_ranges_bulk(barbero_ids, fecha_cita)
+    existing_citas = (
+        Cita.query
+        .filter(Cita.barbero_id.in_(barbero_ids))
+        .filter(Cita.fecha == fecha_cita)
+        .filter(Cita.estado != "cancelada")
+        .all()
+    )
+
+    existing_by_barbero = {barbero_id: [] for barbero_id in barbero_ids}
+    for cita in existing_citas:
+        existing_by_barbero.setdefault(cita.barbero_id, []).append(cita)
+
+    is_today = fecha_cita == date.today()
+    now_minutes = None
+    if is_today:
+        now_dt = datetime.now()
+        now_minutes = (now_dt.hour * 60) + now_dt.minute
+
+    slots_by_barbero = {}
+    for barbero_id in barbero_ids:
+        ranges = ranges_by_barbero.get(barbero_id, [])
+        if not ranges:
+            slots_by_barbero[str(barbero_id)] = []
+            continue
+
+        existing = existing_by_barbero.get(barbero_id, [])
+        slots = []
+        for start_time_range, end_time_range in ranges:
+            start = time_to_minutes(start_time_range)
+            end = time_to_minutes(end_time_range)
+            cursor = start
+
+            while cursor + duracion_minutos <= end:
+                if is_today and now_minutes is not None and cursor <= now_minutes:
+                    cursor += step_minutes
+                    continue
+
+                start_time = minutes_to_time(cursor)
+                end_time = minutes_to_time(cursor + duracion_minutos)
+
+                overlapped = any(
+                    c.hora_inicio < end_time and c.hora_fin > start_time
+                    for c in existing
+                )
+                if not overlapped:
+                    slots.append(start_time.strftime("%H:%M"))
+
+                cursor += step_minutes
+
+        slots_by_barbero[str(barbero_id)] = slots
+
+    return slots_by_barbero
+
+
 def serialize_barbero_excepcion(excepcion):
     return {
         "id": excepcion.id,
@@ -707,15 +815,24 @@ def should_bootstrap():
 
 
 def ensure_admin_from_env():
+    admin_username = os.getenv("ADMIN_USERNAME", "icy_barber").strip() or "icy_barber"
     admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
     if not admin_password:
         return
 
-    admin = User.query.filter_by(username="admin").first()
+    if admin_username != "admin":
+        legacy_admin = User.query.filter_by(username="admin").first()
+        if legacy_admin:
+            db.session.delete(legacy_admin)
+
+    admin = User.query.filter_by(username=admin_username).first()
     if not admin:
-        admin = User(username="admin", role="admin", activo=True)
+        admin = User(username=admin_username, role="admin", activo=True)
         db.session.add(admin)
 
+    admin.role = "admin"
+    admin.activo = True
+    admin.barbero_id = None
     admin.set_password(admin_password)
     db.session.commit()
 
@@ -1058,14 +1175,13 @@ def api_disponibilidad():
         return jsonify({"error": "Servicio no disponible."}), 404
 
     barberos = [b for b in servicio.barberos if b.activo]
-    slots = {}
-    for barbero in barberos:
-        slots[str(barbero.id)] = generate_available_slots(
-            barbero.id,
-            fecha_cita,
-            servicio.duracion_minutos,
-            step_minutes=40,
-        )
+    barbero_ids = [b.id for b in barberos]
+    slots = generate_available_slots_bulk(
+        barbero_ids,
+        fecha_cita,
+        servicio.duracion_minutos,
+        step_minutes=40,
+    )
 
     return jsonify(
         {
