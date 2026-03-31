@@ -67,7 +67,7 @@ AVATAR_WEBP_QUALITY = int(os.getenv("AVATAR_WEBP_QUALITY", "76"))
 BARBERSHOP_INFO = {
     "name": "Icy Barber",
     "category": "Barberia",
-    "address": "C. Barranca Seca 1, Barrio de Xochicalco, 90740 Zacatelco, Tlax. Puebla (Puebla), Mexico",
+    "address": "C. Barranca Seca 1, Barrio de Xochicalco, 90740 Zacatelco, Tlax, Mexico",
     "maps_url": "https://maps.google.com/?q=C.+Barranca+Seca+1,+Barrio+de+Xochicalco,+90740+Zacatelco,+Tlax.+Puebla+(Puebla),+Mexico",
     "phone": "222 506 0172",
     "whatsapp": "222 506 0172",
