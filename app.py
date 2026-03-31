@@ -9,6 +9,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
+from PIL import Image, ImageOps
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -61,6 +62,8 @@ ALLOWED_AVATAR_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 ALLOWED_PRODUCT_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 ALLOWED_PORTFOLIO_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 DEFAULT_AVATAR = "camilo.jpg"
+AVATAR_MAX_SIZE = int(os.getenv("AVATAR_MAX_SIZE", "320"))
+AVATAR_WEBP_QUALITY = int(os.getenv("AVATAR_WEBP_QUALITY", "76"))
 BARBERSHOP_INFO = {
     "name": "Icy Barber",
     "category": "Barberia",
@@ -334,6 +337,23 @@ def parse_date(value):
 
 def allowed_avatar_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_AVATAR_EXTENSIONS
+
+
+def optimize_and_save_avatar(file_storage, destination_path):
+    resampling = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+    with Image.open(file_storage.stream) as img:
+        img = ImageOps.exif_transpose(img)
+        if img.mode not in {"RGB", "RGBA"}:
+            img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
+
+        # Avatares se renderizan pequenos; limite cuadrado para reducir bytes y tiempo de descarga.
+        img.thumbnail((AVATAR_MAX_SIZE, AVATAR_MAX_SIZE), resampling)
+        img.save(
+            destination_path,
+            format="WEBP",
+            quality=max(45, min(95, AVATAR_WEBP_QUALITY)),
+            method=6,
+        )
 
 
 def allowed_product_file(filename):
@@ -1268,13 +1288,21 @@ def api_admin_barberos_avatar_upload():
 
     AVATAR_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     safe_name = secure_filename(file.filename)
-    ext = safe_name.rsplit(".", 1)[1].lower()
-    final_name = f"barbero_{uuid4().hex[:12]}.{ext}"
-    file.save(AVATAR_UPLOAD_DIR / final_name)
+    if "." not in safe_name:
+        return jsonify({"error": "Nombre de archivo inválido."}), 400
+
+    final_name = f"barbero_{uuid4().hex[:12]}.webp"
+    output_path = AVATAR_UPLOAD_DIR / final_name
+
+    try:
+        file.stream.seek(0)
+        optimize_and_save_avatar(file, output_path)
+    except Exception:
+        return jsonify({"error": "No se pudo procesar la imagen. Intenta con otro archivo."}), 400
 
     return jsonify(
         {
-            "message": "Imagen subida correctamente.",
+            "message": "Imagen subida y optimizada correctamente.",
             "avatar": f"uploads/{final_name}",
             "avatar_url": url_for("static", filename=f"img/uploads/{final_name}"),
         }
