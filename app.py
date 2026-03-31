@@ -606,6 +606,12 @@ def generate_available_slots(barbero_id, fecha_cita, duracion_minutos, step_minu
     if not ranges:
         return []
 
+    is_today = fecha_cita == date.today()
+    now_minutes = None
+    if is_today:
+        now_dt = datetime.now()
+        now_minutes = (now_dt.hour * 60) + now_dt.minute
+
     existing = (
         Cita.query.filter_by(barbero_id=barbero_id, fecha=fecha_cita)
         .filter(Cita.estado != "cancelada")
@@ -619,6 +625,10 @@ def generate_available_slots(barbero_id, fecha_cita, duracion_minutos, step_minu
         cursor = start
 
         while cursor + duracion_minutos <= end:
+            if is_today and now_minutes is not None and cursor <= now_minutes:
+                cursor += step_minutes
+                continue
+
             start_time = minutes_to_time(cursor)
             end_time = minutes_to_time(cursor + duracion_minutos)
 
