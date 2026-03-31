@@ -50,6 +50,8 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
 app.config["SQLALCHEMY_DATABASE_URI"] = build_database_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SERVER_NAME"] = os.getenv("SERVER_NAME", "127.0.0.1:8000")
+_static_max_age_env = os.getenv("STATIC_MAX_AGE", "604800").strip()
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = int(_static_max_age_env) if _static_max_age_env.isdigit() else 604800
 
 BASE_DIR = Path(__file__).resolve().parent
 AVATAR_UPLOAD_DIR = BASE_DIR / "static" / "img" / "uploads"
