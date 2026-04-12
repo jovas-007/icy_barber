@@ -161,11 +161,12 @@ CREATE TABLE IF NOT EXISTS citas (
   origen VARCHAR(50) NOT NULL DEFAULT 'Sitio web',
   pagado_efectivo TINYINT(1) NOT NULL DEFAULT 0,
   monto_efectivo INT NULL,
+  cancel_token VARCHAR(80) NULL,
+  canceled_at TIMESTAMP NULL,
   notas VARCHAR(500) NULL,
   reagendada_desde_cita_id BIGINT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  canceled_at TIMESTAMP NULL,
   CONSTRAINT fk_citas_cliente
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
     ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -181,7 +182,8 @@ CREATE TABLE IF NOT EXISTS citas (
   INDEX idx_citas_barbero_fecha (barbero_id, fecha),
   INDEX idx_citas_cliente_fecha (cliente_id, fecha),
   INDEX idx_citas_estado (estado),
-  INDEX idx_citas_fecha_hora (fecha, hora_inicio, hora_fin)
+  INDEX idx_citas_fecha_hora (fecha, hora_inicio, hora_fin),
+  UNIQUE KEY uq_citas_cancel_token (cancel_token)
 );
 
 -- =========================================================

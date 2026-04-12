@@ -213,8 +213,16 @@
 {% if current_user.role == 'admin' %}
 <section class="dash-clients" id="dash-clients" style="display:none;">
     <div class="dash-clients__header">
-        <h3>Clientes y analítica</h3>
-        <p>Historial de citas y comportamiento semanal/mensual de la barbería.</p>
+        <div class="dash-clients__header-top">
+            <div>
+                <h3>Clientes y analítica</h3>
+                <p>Analítica mensual. Solo puedes consultar el mes actual y los 2 meses anteriores.</p>
+            </div>
+            <div class="dash-clients__header-actions">
+                <label for="dash-clients-month" class="dash-clients__month-label">Mes</label>
+                <select id="dash-clients-month" class="dash-clients__month-selector"></select>
+            </div>
+        </div>
     </div>
     <div class="dash-clients__cards" id="dash-clients-cards"></div>
     <div class="dash-clients__charts">
@@ -1101,50 +1109,65 @@ function renderBarChart(containerId, rows, keyField, valueField) {
 function renderClientsAnalytics() {
     const cards = document.getElementById('dash-clients-cards');
     const history = document.getElementById('dash-history-list');
-    if (!cards || !history) return;
+    const monthSelector = document.getElementById('dash-clients-month');
+    if (!cards || !history || !monthSelector) return;
 
-    const citas = [...citasState];
     const now = new Date();
-    const weekAgo = new Date(now);
-    weekAgo.setDate(now.getDate() - 7);
-    const monthAgo = new Date(now);
-    monthAgo.setMonth(now.getMonth() - 1);
+    const monthOptions = [];
+    for (let offset = 2; offset >= 0; offset -= 1) {
+        const targetDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+        const value = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+        const label = targetDate.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+        monthOptions.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
+    }
 
-    const byClientWeek = new Set();
-    const byClientMonth = new Set();
-    const dayCount = {};
-    const monthCount = {};
+    if (!monthSelector.dataset.bound) {
+        monthSelector.innerHTML = monthOptions.map((item) => `<option value="${item.value}">${item.label}</option>`).join('');
+        monthSelector.value = monthOptions[monthOptions.length - 1]?.value || '';
+        monthSelector.dataset.bound = '1';
+        monthSelector.addEventListener('change', renderClientsAnalytics);
+    }
 
-    citas.forEach((c) => {
-        const dt = new Date(`${c.fecha}T00:00:00`);
-        const clientName = c.cliente || 'Cliente';
-        if (dt >= weekAgo) byClientWeek.add(clientName);
-        if (dt >= monthAgo) byClientMonth.add(clientName);
+    const selectedMonth = monthSelector.value || monthOptions[monthOptions.length - 1]?.value || '';
+    const [selectedYear, selectedMonthNum] = selectedMonth.split('-').map(Number);
+    const selectedMonthLabel = monthOptions.find((item) => item.value === selectedMonth)?.label || '';
 
-        const dayName = dt.toLocaleDateString('es-CO', { weekday: 'long' });
-        dayCount[dayName] = (dayCount[dayName] || 0) + 1;
-
-        const monthName = dt.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
-        monthCount[monthName] = (monthCount[monthName] || 0) + 1;
+    const monthCitas = [...citasState].filter((cita) => {
+        const citaDate = new Date(`${cita.fecha}T00:00:00`);
+        return citaDate.getFullYear() === selectedYear && (citaDate.getMonth() + 1) === selectedMonthNum;
     });
 
-    const dayRows = Object.entries(dayCount).map(([dia, total]) => ({ dia, total })).sort((a, b) => b.total - a.total);
-    const monthRows = Object.entries(monthCount).map(([mes, total]) => ({ mes, total })).sort((a, b) => b.total - a.total);
+    const uniqueClients = new Set(monthCitas.map((c) => c.cliente || 'Cliente'));
+    const weekdayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const weekdayCount = weekdayLabels.reduce((acc, label) => {
+        acc[label] = 0;
+        return acc;
+    }, {});
 
-    const mostActive = dayRows[0]?.dia || '-';
-    const leastActive = dayRows[dayRows.length - 1]?.dia || '-';
+    monthCitas.forEach((cita) => {
+        const dt = new Date(`${cita.fecha}T00:00:00`);
+        const dayLabel = weekdayLabels[dt.getDay()] || 'Dom';
+        weekdayCount[dayLabel] = (weekdayCount[dayLabel] || 0) + 1;
+    });
+
+    const dayRows = Object.entries(weekdayCount)
+        .filter(([, total]) => total > 0)
+        .map(([dia, total]) => ({ dia, total }));
+    const activeDays = [...dayRows].sort((a, b) => b.total - a.total);
+    const mostActive = activeDays[0]?.dia || '-';
+    const leastActive = activeDays[activeDays.length - 1]?.dia || '-';
 
     cards.innerHTML = `
-        <article class="dash-kpi-card"><h4>Clientes (7 días)</h4><p>${byClientWeek.size}</p></article>
-        <article class="dash-kpi-card"><h4>Clientes (30 días)</h4><p>${byClientMonth.size}</p></article>
+        <article class="dash-kpi-card"><h4>Clientes del mes</h4><p>${uniqueClients.size}</p></article>
+        <article class="dash-kpi-card"><h4>Citas del mes</h4><p>${monthCitas.length}</p></article>
         <article class="dash-kpi-card"><h4>Día más activo</h4><p>${mostActive}</p></article>
         <article class="dash-kpi-card"><h4>Día más bajo</h4><p>${leastActive}</p></article>
     `;
 
     renderBarChart('chart-daily', dayRows, 'dia', 'total');
-    renderBarChart('chart-monthly', monthRows, 'mes', 'total');
+    renderBarChart('chart-monthly', [{ mes: selectedMonthLabel, total: monthCitas.length }], 'mes', 'total');
 
-    const rows = citas
+    const rows = monthCitas
         .sort((a, b) => (b.fecha + b.hora_inicio).localeCompare(a.fecha + a.hora_inicio))
         .slice(0, 20);
 
@@ -2192,6 +2215,9 @@ function setupCitasOps() {
             setMsg(data.message || 'Cita eliminada del historial.');
             render();
             renderTimeline();
+            if (IS_ADMIN) {
+                renderClientsAnalytics();
+            }
             return;
         }
 
@@ -2219,6 +2245,9 @@ function setupCitasOps() {
         setMsg(data.message || 'Cita actualizada.');
         render();
         renderTimeline();
+        if (IS_ADMIN) {
+            renderClientsAnalytics();
+        }
     });
 
     setFilter('total');

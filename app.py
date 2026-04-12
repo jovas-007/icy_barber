@@ -1,5 +1,8 @@
 import os
 import re
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from datetime import date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
@@ -53,6 +56,10 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SERVER_NAME"] = os.getenv("SERVER_NAME", "127.0.0.1:8000")
 _static_max_age_env = os.getenv("STATIC_MAX_AGE", "604800").strip()
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = int(_static_max_age_env) if _static_max_age_env.isdigit() else 604800
+RESEND_API_KEY = os.getenv("barberia_correos", "").strip() or os.getenv("RESEND_API_KEY", "").strip()
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "reservas@icybarber.me").strip() or "reservas@icybarber.me"
+RESEND_REPLY_TO_EMAIL = os.getenv("RESEND_REPLY_TO_EMAIL", "").strip() or None
+RESEND_API_URL = "https://api.resend.com/emails"
 
 BASE_DIR = Path(__file__).resolve().parent
 AVATAR_UPLOAD_DIR = BASE_DIR / "static" / "img" / "uploads"
@@ -278,6 +285,8 @@ class Cita(db.Model):
     origen = db.Column(db.String(50), nullable=False, default="Sitio web")
     pagado_efectivo = db.Column(db.Boolean, default=False, nullable=False)
     monto_efectivo = db.Column(db.Integer, nullable=True)
+    cancel_token = db.Column(db.String(80), unique=True, index=True, nullable=True, default=lambda: uuid4().hex)
+    canceled_at = db.Column(db.DateTime, nullable=True)
 
     cliente = db.relationship("Cliente")
     servicio = db.relationship("Servicio")
@@ -409,6 +418,145 @@ def normalize_phone_10(raw_phone):
     return digits
 
 
+def send_resend_email(to_email, subject, html, text=None, reply_to=None):
+    if not RESEND_API_KEY:
+        app.logger.warning("Resend no configurado: falta API key.")
+        return False
+
+    recipients = [to_email] if isinstance(to_email, str) else list(to_email or [])
+    recipients = [str(email).strip().lower() for email in recipients if str(email).strip()]
+    if not recipients:
+        return False
+
+    payload = {
+        "from": RESEND_FROM_EMAIL,
+        "to": recipients,
+        "subject": subject,
+        "html": html,
+    }
+    if text:
+        payload["text"] = text
+    if reply_to:
+        payload["reply_to"] = reply_to
+
+    request = Request(
+        RESEND_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urlopen(request, timeout=15) as response:
+            response.read()
+        return True
+    except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+        app.logger.warning("No se pudo enviar correo Resend: %s", exc)
+        return False
+
+
+def build_public_cancel_url(cancel_token):
+        if not cancel_token:
+                return None
+        return url_for("public_cancel_cita", token=cancel_token, _external=True)
+
+
+def build_booking_confirmation_email(customer_name, citas_rows):
+        citas_rows = list(citas_rows or [])
+        total = len(citas_rows)
+        title = f"Reserva confirmada en {BARBERSHOP_INFO['name']}"
+        intro = f"Hola {customer_name}, tu reservación quedó confirmada." if customer_name else "Tu reservación quedó confirmada."
+        summary_label = "1 cita" if total == 1 else f"{total} citas"
+
+        html_cards = []
+        text_rows = []
+        for row in citas_rows:
+                service_name = row.servicio.nombre if row.servicio else "Servicio"
+                barber_name = row.barbero.nombre if row.barbero else "Barbero"
+                fecha_label = row.fecha.strftime("%d/%m/%Y")
+                hora_inicio = row.hora_inicio.strftime("%H:%M")
+                hora_fin = row.hora_fin.strftime("%H:%M")
+                cancel_url = build_public_cancel_url(getattr(row, "cancel_token", None))
+
+                action_html = ""
+                action_text = ""
+                if cancel_url:
+                        action_html = (
+                                f"<a href='{cancel_url}' style='display:inline-block;background:#8b1d2c;color:#fff;text-decoration:none;"
+                                f"padding:12px 18px;border-radius:999px;font-weight:700'>Cancelar cita</a>"
+                        )
+                        action_text = f"Cancelación: {cancel_url}"
+
+                html_cards.append(
+                        f"""
+                        <div style="background:#fff7f5;border:1px solid #f2d6cf;border-radius:18px;padding:18px 18px 16px;margin:0 0 14px">
+                            <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start">
+                                <div>
+                                    <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8b1d2c;font-weight:800;margin-bottom:6px">{service_name}</div>
+                                    <div style="font-size:18px;font-weight:800;color:#111827;line-height:1.2">{fecha_label}</div>
+                                    <div style="font-size:14px;color:#4b5563;margin-top:4px">{hora_inicio} - {hora_fin} · {barber_name}</div>
+                                </div>
+                                <div style="min-width:160px;text-align:right">{action_html}</div>
+                            </div>
+                        </div>
+                        """
+                )
+                text_rows.append(f"- {fecha_label} | {hora_inicio}-{hora_fin} | {service_name} | {barber_name}")
+                if action_text:
+                        text_rows.append(action_text)
+
+        html = f"""
+        <div style="font-family:Arial,sans-serif;background:linear-gradient(180deg,#faf7f5 0%,#ffffff 100%);padding:24px;color:#111827">
+            <div style="max-width:680px;margin:0 auto;background:#fff;border-radius:24px;overflow:hidden;border:1px solid #eaded9;box-shadow:0 18px 48px rgba(17,24,39,.08)">
+                <div style="background:linear-gradient(135deg,#111827 0%,#2b1714 55%,#8b1d2c 100%);padding:28px 28px 22px;color:#fff">
+                    <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.8;font-weight:700">{BARBERSHOP_INFO['name']}</div>
+                    <h2 style="margin:10px 0 8px;font-size:28px;line-height:1.1">{title}</h2>
+                    <p style="margin:0;max-width:560px;color:rgba(255,255,255,.88);line-height:1.55">{intro}</p>
+                </div>
+                <div style="padding:26px 28px 28px">
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+                        <span style="background:#111827;color:#fff;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:700">{summary_label}</span>
+                        <span style="background:#f3f4f6;color:#374151;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:600">{BARBERSHOP_INFO['address']}</span>
+                    </div>
+                    {''.join(html_cards)}
+                    <div style="margin-top:20px;padding-top:18px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:12px;line-height:1.6">
+                        Si no solicitaste esta reserva, ignora este correo. Si quieres reagendar o cancelar, usa el botón de cada cita antes de que la atiendan.
+                    </div>
+                </div>
+            </div>
+        </div>
+        """
+        text = "\n".join([
+                title,
+                intro,
+                f"Resumen: {summary_label}",
+                f"Lugar: {BARBERSHOP_INFO['name']}",
+                f"Dirección: {BARBERSHOP_INFO['address']}",
+                f"Total de servicios: {total}",
+                *text_rows,
+                "Si no solicitaste esta reserva, ignora este correo.",
+        ])
+        return title, html, text
+
+
+def notify_booking_confirmation(cliente, citas_rows):
+    if not cliente or not cliente.email:
+        return False
+
+    customer_name = f"{cliente.nombres} {cliente.apellidos}".strip()
+    subject, html, text = build_booking_confirmation_email(customer_name, citas_rows)
+    return send_resend_email(
+        cliente.email,
+        subject,
+        html,
+        text=text,
+        reply_to=RESEND_REPLY_TO_EMAIL,
+    )
+
+
 def normalize_product_image_name(value):
     image_name = str(value or "").strip()
     if not image_name or image_name.lower() in {"none", "null", "undefined"}:
@@ -454,6 +602,36 @@ def ensure_barbero_service_tables():
     table_names = set(inspector.get_table_names())
     if "excepciones_disponibilidad_barbero" not in table_names:
         ExcepcionDisponibilidadBarbero.__table__.create(bind=db.engine)
+
+
+def ensure_cita_public_columns():
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    if "citas" not in table_names:
+        return
+
+    columns = {col["name"] for col in inspector.get_columns("citas")}
+    if "cancel_token" not in columns:
+        db.session.execute(text("ALTER TABLE citas ADD COLUMN cancel_token VARCHAR(80) NULL"))
+        db.session.commit()
+
+    if "canceled_at" not in columns:
+        db.session.execute(text("ALTER TABLE citas ADD COLUMN canceled_at TIMESTAMP NULL"))
+        db.session.commit()
+
+    pending_tokens = Cita.query.filter(Cita.cancel_token.is_(None)).all()
+    if pending_tokens:
+        for cita in pending_tokens:
+            cita.cancel_token = uuid4().hex
+        db.session.commit()
+
+    indexes = {index["name"] for index in inspector.get_indexes("citas")}
+    if "uq_citas_cancel_token" not in indexes:
+        try:
+            db.session.execute(text("CREATE UNIQUE INDEX uq_citas_cancel_token ON citas (cancel_token)"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 def ensure_sample_products():
@@ -1343,6 +1521,7 @@ def api_create_cita_public():
     )
     db.session.add(cita)
     db.session.commit()
+    notify_booking_confirmation(cliente, [cita])
 
     return jsonify({"message": "Cita creada correctamente.", "cita": serialize_cita(cita)}), 201
 
@@ -1435,6 +1614,7 @@ def api_create_citas_public_batch():
 
     db.session.add_all(prepared)
     db.session.commit()
+    notify_booking_confirmation(cliente, prepared)
 
     return jsonify({"message": "Reservación creada correctamente.", "citas": [serialize_cita(c) for c in prepared]}), 201
 
@@ -2070,6 +2250,53 @@ def api_admin_citas_delete(cita_id):
     return jsonify({"message": "Cita cancelada eliminada del historial."})
 
 
+@app.route("/citas/cancelar/<string:token>", methods=["GET", "POST"])
+def public_cancel_cita(token):
+    cita = Cita.query.filter_by(cancel_token=token.strip()).first()
+    if not cita:
+        return render_template(
+            "cancel_cita.html",
+            cita=None,
+            cancel_token=token,
+            cancel_state="not_found",
+        ), 404
+
+    if request.method == "POST":
+        if cita.estado == "completada":
+            return render_template(
+                "cancel_cita.html",
+                cita=cita,
+                cancel_token=token,
+                cancel_state="completed",
+            ), 400
+
+        if cita.estado != "cancelada":
+            cita.estado = "cancelada"
+            cita.canceled_at = datetime.utcnow()
+            db.session.commit()
+
+        return render_template(
+            "cancel_cita.html",
+            cita=cita,
+            cancel_token=token,
+            cancel_state="cancelled",
+        )
+
+    if cita.estado == "cancelada":
+        cancel_state = "already_cancelled"
+    elif cita.estado == "completada":
+        cancel_state = "completed"
+    else:
+        cancel_state = "ready"
+
+    return render_template(
+        "cancel_cita.html",
+        cita=cita,
+        cancel_token=token,
+        cancel_state=cancel_state,
+    )
+
+
 @app.route("/api/barbero/servicio", methods=["GET"])
 @role_required("barbero")
 def api_barbero_servicio_get():
@@ -2314,11 +2541,13 @@ with app.app_context():
         ensure_product_image_column()
         ensure_portfolio_table()
         ensure_barbero_service_tables()
+        ensure_cita_public_columns()
         seed_data()
     else:
         ensure_product_image_column()
         ensure_portfolio_table()
         ensure_barbero_service_tables()
+        ensure_cita_public_columns()
 
     ensure_sample_products()
     sync_service_catalog(reset_citas_on_change=True)

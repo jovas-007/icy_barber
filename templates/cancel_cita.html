@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+
+{% block title %}Cancelar cita | Icy Barber{% endblock %}
+{% block body_class %}cancel-page{% endblock %}
+{% block show_footer %}false{% endblock %}
+
+{% block extra_css %}
+<style>
+    .cancel-page {
+        min-height: 100vh;
+        background:
+            radial-gradient(circle at top left, rgba(139, 29, 44, 0.18), transparent 32%),
+            radial-gradient(circle at bottom right, rgba(17, 24, 39, 0.14), transparent 28%),
+            linear-gradient(180deg, #faf7f5 0%, #ffffff 100%);
+    }
+
+    .cancel-shell {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 32px 20px;
+    }
+
+    .cancel-card {
+        width: min(100%, 760px);
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(234, 222, 217, 0.9);
+        border-radius: 28px;
+        box-shadow: 0 24px 60px rgba(17, 24, 39, 0.12);
+        overflow: hidden;
+    }
+
+    .cancel-hero {
+        padding: 30px 30px 24px;
+        background: linear-gradient(135deg, #111827 0%, #2b1714 48%, #8b1d2c 100%);
+        color: #fff;
+    }
+
+    .cancel-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-weight: 800;
+    }
+
+    .cancel-title {
+        margin: 14px 0 10px;
+        font-size: clamp(2rem, 4vw, 3rem);
+        line-height: 1.05;
+    }
+
+    .cancel-copy {
+        margin: 0;
+        max-width: 58ch;
+        color: rgba(255, 255, 255, 0.88);
+        line-height: 1.55;
+    }
+
+    .cancel-body {
+        padding: 28px 30px 30px;
+    }
+
+    .appointment-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin: 22px 0 24px;
+    }
+
+    .appointment-item {
+        background: #fafafa;
+        border: 1px solid #ebe6e2;
+        border-radius: 18px;
+        padding: 16px;
+    }
+
+    .appointment-label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #8b1d2c;
+    }
+
+    .appointment-value {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.45;
+        color: #111827;
+        font-weight: 600;
+    }
+
+    .action-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 10px;
+    }
+
+    .btn-confirm,
+    .btn-secondary,
+    .btn-home {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border-radius: 999px;
+        text-decoration: none;
+        font-weight: 800;
+        transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+    }
+
+    .btn-confirm {
+        background: #8b1d2c;
+        color: #fff;
+        border: none;
+        box-shadow: 0 12px 24px rgba(139, 29, 44, 0.24);
+        cursor: pointer;
+    }
+
+    .btn-secondary,
+    .btn-home {
+        background: #f3f4f6;
+        color: #111827;
+        border: 1px solid #e5e7eb;
+    }
+
+    .btn-confirm:hover,
+    .btn-secondary:hover,
+    .btn-home:hover {
+        transform: translateY(-1px);
+    }
+
+    .notice {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: #fff7f5;
+        border: 1px solid #f2d6cf;
+        color: #6b1b24;
+        line-height: 1.55;
+    }
+
+    .notice.ok {
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+        color: #166534;
+    }
+
+    .notice.warn {
+        background: #fffbeb;
+        border-color: #fde68a;
+        color: #92400e;
+    }
+
+    @media (max-width: 720px) {
+        .cancel-hero,
+        .cancel-body {
+            padding-left: 20px;
+            padding-right: 20px;
+        }
+
+        .appointment-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cancel-shell">
+    <section class="cancel-card">
+        <header class="cancel-hero">
+            <span class="cancel-kicker">Icy Barber</span>
+            {% if cancel_state == 'cancelled' %}
+                <h1 class="cancel-title">Cita cancelada</h1>
+                <p class="cancel-copy">La cita se canceló correctamente. Si cambiaste de opinión, puedes volver a reservar cuando quieras.</p>
+            {% elif cancel_state == 'already_cancelled' %}
+                <h1 class="cancel-title">Esta cita ya estaba cancelada</h1>
+                <p class="cancel-copy">El enlace sigue siendo válido, pero la cita ya no está activa en el sistema.</p>
+            {% elif cancel_state == 'completed' %}
+                <h1 class="cancel-title">Esta cita ya fue atendida</h1>
+                <p class="cancel-copy">Las citas completadas no se pueden cancelar desde este enlace.</p>
+            {% elif cancel_state == 'not_found' %}
+                <h1 class="cancel-title">Enlace no válido</h1>
+                <p class="cancel-copy">No pudimos encontrar una cita asociada a este enlace. Revisa que el correo esté completo o vuelve a contactar a la barbería.</p>
+            {% else %}
+                <h1 class="cancel-title">Cancelar cita</h1>
+                <p class="cancel-copy">Revisa los detalles de tu reserva antes de cancelarla. Esta acción actualizará el estado de la cita de forma inmediata.</p>
+            {% endif %}
+        </header>
+
+        <div class="cancel-body">
+            {% if cita %}
+                <div class="appointment-grid">
+                    <div class="appointment-item">
+                        <span class="appointment-label">Fecha</span>
+                        <p class="appointment-value">{{ cita.fecha.strftime('%d/%m/%Y') }}</p>
+                    </div>
+                    <div class="appointment-item">
+                        <span class="appointment-label">Hora</span>
+                        <p class="appointment-value">{{ cita.hora_inicio.strftime('%H:%M') }} - {{ cita.hora_fin.strftime('%H:%M') }}</p>
+                    </div>
+                    <div class="appointment-item">
+                        <span class="appointment-label">Servicio</span>
+                        <p class="appointment-value">{{ cita.servicio.nombre if cita.servicio else 'Servicio' }}</p>
+                    </div>
+                    <div class="appointment-item">
+                        <span class="appointment-label">Barbero</span>
+                        <p class="appointment-value">{{ cita.barbero.nombre if cita.barbero else 'Barbero' }}</p>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if cancel_state == 'ready' %}
+                <form method="post">
+                    <div class="action-row">
+                        <button type="submit" class="btn-confirm">Confirmar cancelación</button>
+                        <a class="btn-secondary" href="{{ url_for('booking') }}">Mantener cita</a>
+                    </div>
+                </form>
+                <div class="notice warn">
+                    Al cancelar, la cita dejará de aparecer como activa y ese horario volverá a quedar disponible para nuevas reservas.
+                </div>
+            {% elif cancel_state == 'cancelled' %}
+                <div class="notice ok">
+                    Tu cita quedó cancelada. Si necesitas reprogramar, puedes volver a reservar desde la página principal.
+                </div>
+                <div class="action-row">
+                    <a class="btn-home" href="{{ url_for('booking') }}">Ir al inicio</a>
+                </div>
+            {% elif cancel_state == 'already_cancelled' %}
+                <div class="notice warn">
+                    No se aplicaron cambios porque la cita ya estaba cancelada.
+                </div>
+                <div class="action-row">
+                    <a class="btn-home" href="{{ url_for('booking') }}">Ir al inicio</a>
+                </div>
+            {% elif cancel_state == 'completed' %}
+                <div class="notice warn">
+                    Esta cita ya fue completada, por lo que no es posible cancelarla desde este enlace.
+                </div>
+                <div class="action-row">
+                    <a class="btn-home" href="{{ url_for('booking') }}">Ir al inicio</a>
+                </div>
+            {% else %}
+                <div class="notice warn">
+                    Si no reconoces esta reserva, no compartas este enlace y contacta a la barbería directamente.
+                </div>
+                <div class="action-row">
+                    <a class="btn-home" href="{{ url_for('booking') }}">Volver al inicio</a>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

@@ -18,6 +18,7 @@ Rutas principales
 - `/api/servicios` : JSON de servicios.
 - `/api/citas` : JSON de citas (admin ve todas, barbero solo las suyas).
 - `/api/citas/public` : Crear cita desde la web pública (cliente).
+- `/citas/cancelar/<token>` : Confirmación pública para cancelar una cita desde el correo.
 - `/api/admin/barberos` : Listar/crear barberos (admin).
 - `/api/admin/barberos/<id>` : Editar/desactivar barbero (admin).
 
@@ -31,6 +32,7 @@ Funcionalidad ya implementada
   - crear barbero,
   - editar datos y horario,
   - desactivar barbero.
+- Correos de confirmación por Resend con resumen visual y botón seguro para cancelar cada cita desde una página pública.
 
 Credenciales demo iniciales
 - Admin:

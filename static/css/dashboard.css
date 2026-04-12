@@ -1246,6 +1246,50 @@
     font-size: var(--font-sm);
 }
 
+.dash-clients__header-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-lg);
+}
+
+.dash-clients__header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: 2px;
+}
+
+.dash-clients__month-label {
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+}
+
+.dash-clients__month-selector {
+    min-width: 170px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: #fff;
+    color: var(--color-text-body);
+    font-size: var(--font-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.dash-clients__month-selector:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text-dark);
+}
+
+.dash-clients__month-selector:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
 .dash-clients__cards {
     margin-top: var(--space-md);
     display: grid;
@@ -1988,6 +2032,19 @@
 }
 
 @media (max-width: 460px) {
+    .dash-clients__header-top {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .dash-clients__header-actions {
+        width: 100%;
+    }
+
+    .dash-clients__month-selector {
+        width: 100%;
+    }
+
     .admin-barbero-card__actions {
         grid-template-columns: 1fr;
     }
