@@ -1,6 +1,9 @@
 import os
 import re
 import json
+import smtplib
+import ssl
+from email.message import EmailMessage
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from datetime import date, datetime, timedelta
@@ -64,6 +67,11 @@ RESEND_API_KEY = (
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "reservas@icybarber.me").strip() or "reservas@icybarber.me"
 RESEND_REPLY_TO_EMAIL = os.getenv("RESEND_REPLY_TO_EMAIL", "").strip() or None
 RESEND_API_URL = "https://api.resend.com/emails"
+RESEND_SMTP_HOST = os.getenv("RESEND_SMTP_HOST", "smtp.resend.com").strip() or "smtp.resend.com"
+_resend_smtp_port_env = os.getenv("RESEND_SMTP_PORT", "587").strip()
+RESEND_SMTP_PORT = int(_resend_smtp_port_env) if _resend_smtp_port_env.isdigit() else 587
+RESEND_SMTP_USERNAME = os.getenv("RESEND_SMTP_USERNAME", "resend").strip() or "resend"
+RESEND_SMTP_FALLBACK_ENABLED = os.getenv("RESEND_SMTP_FALLBACK", "true").strip().lower() not in {"0", "false", "no", "off"}
 
 BASE_DIR = Path(__file__).resolve().parent
 AVATAR_UPLOAD_DIR = BASE_DIR / "static" / "img" / "uploads"
@@ -422,6 +430,39 @@ def normalize_phone_10(raw_phone):
     return digits
 
 
+def send_resend_email_smtp(recipients, subject, html, text=None, reply_to=None):
+    if not RESEND_API_KEY:
+        return False
+
+    message = EmailMessage()
+    message["From"] = RESEND_FROM_EMAIL
+    message["To"] = ", ".join(recipients)
+    message["Subject"] = subject
+    if reply_to:
+        message["Reply-To"] = reply_to
+
+    plain_text = str(text or "").strip()
+    if not plain_text:
+        plain_text = re.sub(r"<[^>]+>", " ", str(html or ""))
+        plain_text = re.sub(r"\s+", " ", plain_text).strip()
+
+    message.set_content(plain_text or "Confirmación de cita")
+    if html:
+        message.add_alternative(html, subtype="html")
+
+    try:
+        with smtplib.SMTP(RESEND_SMTP_HOST, RESEND_SMTP_PORT, timeout=20) as smtp:
+            smtp.ehlo()
+            smtp.starttls(context=ssl.create_default_context())
+            smtp.ehlo()
+            smtp.login(RESEND_SMTP_USERNAME, RESEND_API_KEY)
+            smtp.send_message(message)
+        return True
+    except Exception as exc:
+        app.logger.warning("No se pudo enviar correo Resend vía SMTP: %s", exc)
+        return False
+
+
 def send_resend_email(to_email, subject, html, text=None, reply_to=None):
     if not RESEND_API_KEY:
         app.logger.warning("Resend no configurado: falta API key.")
@@ -449,6 +490,8 @@ def send_resend_email(to_email, subject, html, text=None, reply_to=None):
         headers={
             "Authorization": f"Bearer {RESEND_API_KEY}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "IcyBarber/1.0",
         },
         method="POST",
     )
@@ -470,6 +513,17 @@ def send_resend_email(to_email, subject, html, text=None, reply_to=None):
             getattr(exc, "reason", ""),
             error_body[:800],
         )
+
+        if (
+            RESEND_SMTP_FALLBACK_ENABLED
+            and getattr(exc, "code", None) == 403
+            and "error code: 1010" in error_body.lower()
+        ):
+            app.logger.warning("Resend API bloqueada por error 1010. Intentando fallback SMTP...")
+            if send_resend_email_smtp(recipients, subject, html, text=text, reply_to=reply_to):
+                app.logger.warning("Correo enviado por SMTP fallback tras bloqueo 1010 en API.")
+                return True
+
         return False
     except (URLError, TimeoutError, ValueError) as exc:
         app.logger.warning("No se pudo enviar correo Resend: %s", exc)
