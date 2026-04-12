@@ -56,7 +56,11 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SERVER_NAME"] = os.getenv("SERVER_NAME", "127.0.0.1:8000")
 _static_max_age_env = os.getenv("STATIC_MAX_AGE", "604800").strip()
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = int(_static_max_age_env) if _static_max_age_env.isdigit() else 604800
-RESEND_API_KEY = os.getenv("barberia_enviar", "").strip() or os.getenv("RESEND_API_KEY", "").strip()
+RESEND_API_KEY = (
+    os.getenv("barberia_enviar", "").strip()
+    or os.getenv("barberia_correos", "").strip()
+    or os.getenv("RESEND_API_KEY", "").strip()
+)
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "reservas@icybarber.me").strip() or "reservas@icybarber.me"
 RESEND_REPLY_TO_EMAIL = os.getenv("RESEND_REPLY_TO_EMAIL", "").strip() or None
 RESEND_API_URL = "https://api.resend.com/emails"
@@ -453,7 +457,21 @@ def send_resend_email(to_email, subject, html, text=None, reply_to=None):
         with urlopen(request, timeout=15) as response:
             response.read()
         return True
-    except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+    except HTTPError as exc:
+        error_body = ""
+        try:
+            error_body = exc.read().decode("utf-8", errors="ignore")
+        except Exception:
+            error_body = ""
+
+        app.logger.warning(
+            "No se pudo enviar correo Resend: HTTP %s %s | body=%s",
+            getattr(exc, "code", "?"),
+            getattr(exc, "reason", ""),
+            error_body[:800],
+        )
+        return False
+    except (URLError, TimeoutError, ValueError) as exc:
         app.logger.warning("No se pudo enviar correo Resend: %s", exc)
         return False
 
