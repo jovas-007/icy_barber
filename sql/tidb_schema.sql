@@ -234,6 +234,22 @@ CREATE TABLE IF NOT EXISTS notificaciones_email (
 );
 
 -- =========================================================
+-- Portafolio de imágenes
+-- barbero_id NULL  = portafolio global
+-- barbero_id != NULL = portafolio por barbero
+-- =========================================================
+CREATE TABLE IF NOT EXISTS portfolio_imagenes (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  barbero_id BIGINT NULL,
+  imagen VARCHAR(255) NOT NULL,
+  sort_order INT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_portfolio_scope (barbero_id, activo),
+  INDEX idx_portfolio_sort (barbero_id, sort_order)
+);
+
+-- =========================================================
 -- Datos semilla mínimos
 -- =========================================================
 INSERT INTO barberos (nombre, telefono, email, avatar)

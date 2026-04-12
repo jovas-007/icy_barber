@@ -1612,6 +1612,77 @@
     color: #b91c1c;
 }
 
+.dash-ops__filters {
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.dash-ops__filter-btn {
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--color-text-body);
+    font-size: var(--font-xs);
+    font-weight: 600;
+    padding: 6px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dash-ops__filter-btn span {
+    min-width: 20px;
+    text-align: center;
+    border-radius: 999px;
+    background: #eef2f7;
+    padding: 2px 6px;
+}
+
+.dash-ops__filter-btn--active {
+    border-color: #0f172a;
+    background: #111827;
+    color: #f8fafc;
+}
+
+.dash-ops__filter-btn--active span {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.dash-portfolio-scope {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.dash-portfolio-scope__tabs {
+    display: inline-flex;
+    gap: 8px;
+}
+
+.dash-portfolio-scope__filter {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dash-portfolio-scope__filter label {
+    font-size: var(--font-xs);
+    color: var(--color-text-muted);
+    font-weight: 600;
+}
+
+.dash-portfolio-scope__filter select {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-size: var(--font-xs);
+    background: #fff;
+}
+
 .dash-ops__list {
     display: grid;
     gap: var(--space-sm);
@@ -1815,6 +1886,15 @@
         justify-content: space-between;
     }
 
+    .dash-ops__filters {
+        width: 100%;
+    }
+
+    .dash-ops__filter-btn {
+        flex: 1;
+        justify-content: center;
+    }
+
     .dash-ops__buttons button {
         width: 100%;
     }
@@ -1870,6 +1950,22 @@
     .dash-catalog__tabs {
         display: grid;
         grid-template-columns: 1fr;
+    }
+
+    .dash-portfolio-scope {
+        align-items: stretch;
+    }
+
+    .dash-portfolio-scope__tabs {
+        width: 100%;
+    }
+
+    .dash-portfolio-scope__tabs .dash-catalog__tab {
+        flex: 1;
+    }
+
+    .dash-portfolio-scope__filter {
+        width: 100%;
     }
 
     .dash-catalog__field--details,

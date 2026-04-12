@@ -301,6 +301,8 @@ class PortfolioImagen(db.Model):
     __tablename__ = "portfolio_imagenes"
 
     id = db.Column(db.Integer, primary_key=True)
+    # Nullable para mantener compatibilidad: NULL = portafolio global de la barbería.
+    barbero_id = db.Column(db.Integer, nullable=True, index=True)
     imagen = db.Column(db.String(255), nullable=False)
     sort_order = db.Column(db.Integer, nullable=True)
     activo = db.Column(db.Boolean, default=True, nullable=False)
@@ -436,11 +438,15 @@ def ensure_portfolio_table():
         return
 
     columns = {col["name"] for col in inspector.get_columns("portfolio_imagenes")}
+    if "barbero_id" not in columns:
+        db.session.execute(text("ALTER TABLE portfolio_imagenes ADD COLUMN barbero_id INTEGER NULL"))
+        db.session.commit()
+
     if "sort_order" not in columns:
         db.session.execute(text("ALTER TABLE portfolio_imagenes ADD COLUMN sort_order INTEGER NULL"))
         db.session.commit()
 
-    normalize_portfolio_order()
+    normalize_all_portfolio_orders()
 
 
 def ensure_barbero_service_tables():
@@ -990,6 +996,7 @@ def serialize_cita(cita):
 def serialize_portfolio_image(item):
     return {
         "id": item.id,
+        "barbero_id": item.barbero_id,
         "imagen": item.imagen,
         "imagen_url": url_for("static", filename=f"img/portfolio/{item.imagen}"),
         "sort_order": item.sort_order,
@@ -998,10 +1005,17 @@ def serialize_portfolio_image(item):
     }
 
 
-def get_portfolio_items_ordered(only_active=True):
+def get_portfolio_items_ordered(only_active=True, barbero_scope="all", barbero_id=None):
     query = PortfolioImagen.query
     if only_active:
         query = query.filter_by(activo=True)
+
+    if barbero_scope == "global":
+        query = query.filter(PortfolioImagen.barbero_id.is_(None))
+    elif barbero_scope == "barber":
+        if barbero_id is None:
+            return []
+        query = query.filter(PortfolioImagen.barbero_id == barbero_id)
 
     items = query.all()
     return sorted(
@@ -1014,8 +1028,12 @@ def get_portfolio_items_ordered(only_active=True):
     )
 
 
-def normalize_portfolio_order():
-    items = get_portfolio_items_ordered(only_active=False)
+def normalize_portfolio_order(barbero_scope="global", barbero_id=None):
+    items = get_portfolio_items_ordered(
+        only_active=False,
+        barbero_scope=barbero_scope,
+        barbero_id=barbero_id,
+    )
     changed = False
     for idx, item in enumerate(items, start=1):
         if item.sort_order != idx:
@@ -1023,6 +1041,30 @@ def normalize_portfolio_order():
             changed = True
     if changed:
         db.session.commit()
+
+
+def normalize_all_portfolio_orders():
+    normalize_portfolio_order(barbero_scope="global")
+    barber_ids = [
+        row[0]
+        for row in db.session.query(PortfolioImagen.barbero_id)
+        .filter(PortfolioImagen.barbero_id.isnot(None))
+        .distinct()
+        .all()
+    ]
+    for barber_id in barber_ids:
+        normalize_portfolio_order(barbero_scope="barber", barbero_id=barber_id)
+
+
+def get_next_portfolio_order(barbero_scope="global", barbero_id=None):
+    items = get_portfolio_items_ordered(
+        only_active=False,
+        barbero_scope=barbero_scope,
+        barbero_id=barbero_id,
+    )
+    if not items:
+        return 1
+    return max(int(item.sort_order or 0) for item in items) + 1
 
 
 def get_payload():
@@ -1056,14 +1098,26 @@ def booking():
     ]
     portfolio_images = [
         serialize_portfolio_image(p)
-        for p in get_portfolio_items_ordered(only_active=True)
+        for p in get_portfolio_items_ordered(only_active=True, barbero_scope="global")
     ]
+    team_portfolios = {
+        str(barbero["id"]): [
+            serialize_portfolio_image(item)
+            for item in get_portfolio_items_ordered(
+                only_active=True,
+                barbero_scope="barber",
+                barbero_id=barbero["id"],
+            )
+        ]
+        for barbero in barberos
+    }
     return render_template(
         "booking.html",
         barberos=barberos,
         servicios=servicios,
         productos=productos,
         portfolio_images=portfolio_images,
+        team_portfolios=team_portfolios,
     )
 
 
@@ -1724,9 +1778,24 @@ def api_admin_catalogo_delete(item_id):
 
 @app.route("/api/portafolio", methods=["GET"])
 def api_portafolio_public_list():
+    barbero_id = request.args.get("barbero_id", type=int)
+    if barbero_id:
+        barbero = db.session.get(Barbero, barbero_id)
+        if not barbero or not barbero.activo:
+            return jsonify([])
+        items = [
+            serialize_portfolio_image(p)
+            for p in get_portfolio_items_ordered(
+                only_active=True,
+                barbero_scope="barber",
+                barbero_id=barbero_id,
+            )
+        ]
+        return jsonify(items)
+
     items = [
         serialize_portfolio_image(p)
-        for p in get_portfolio_items_ordered(only_active=True)
+        for p in get_portfolio_items_ordered(only_active=True, barbero_scope="global")
     ]
     return jsonify(items)
 
@@ -1734,7 +1803,27 @@ def api_portafolio_public_list():
 @app.route("/api/admin/portafolio", methods=["GET"])
 @role_required("admin")
 def api_admin_portafolio_list():
-    items = [serialize_portfolio_image(p) for p in get_portfolio_items_ordered(only_active=False)]
+    scope = str(request.args.get("scope", "global")).strip().lower()
+    barbero_id = request.args.get("barbero_id", type=int)
+
+    if scope == "barbero":
+        if not barbero_id:
+            return jsonify([])
+        items = [
+            serialize_portfolio_image(p)
+            for p in get_portfolio_items_ordered(
+                only_active=False,
+                barbero_scope="barber",
+                barbero_id=barbero_id,
+            )
+        ]
+    elif scope == "all":
+        items = [serialize_portfolio_image(p) for p in get_portfolio_items_ordered(only_active=False, barbero_scope="all")]
+    else:
+        items = [
+            serialize_portfolio_image(p)
+            for p in get_portfolio_items_ordered(only_active=False, barbero_scope="global")
+        ]
     return jsonify(items)
 
 
@@ -1748,16 +1837,35 @@ def api_admin_portafolio_create():
     if not allowed_portfolio_file(file.filename):
         return jsonify({"error": "Formato inválido. Usa PNG, JPG, JPEG o WEBP."}), 400
 
+    raw_barbero_id = str(request.form.get("barbero_id", "")).strip()
+    target_barbero_id = None
+    target_scope = "global"
+    if raw_barbero_id:
+        try:
+            target_barbero_id = int(raw_barbero_id)
+        except ValueError:
+            return jsonify({"error": "barbero_id inválido."}), 400
+
+        barbero = db.session.get(Barbero, target_barbero_id)
+        if not barbero:
+            return jsonify({"error": "Barbero no encontrado."}), 404
+        target_scope = "barber"
+
     PORTFOLIO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     safe_name = secure_filename(file.filename)
     ext = safe_name.rsplit(".", 1)[1].lower()
     final_name = f"portfolio_{uuid4().hex[:12]}.{ext}"
     file.save(PORTFOLIO_UPLOAD_DIR / final_name)
 
-    current_max_order = db.session.query(db.func.max(PortfolioImagen.sort_order)).scalar() or 0
-    item = PortfolioImagen(imagen=final_name, sort_order=int(current_max_order) + 1, activo=True)
+    item = PortfolioImagen(
+        imagen=final_name,
+        barbero_id=target_barbero_id,
+        sort_order=get_next_portfolio_order(target_scope, target_barbero_id),
+        activo=True,
+    )
     db.session.add(item)
     db.session.commit()
+    normalize_portfolio_order(target_scope, target_barbero_id)
 
     return jsonify({"message": "Imagen agregada al portafolio.", "item": serialize_portfolio_image(item)}), 201
 
@@ -1773,9 +1881,12 @@ def api_admin_portafolio_delete(image_id):
     if item.imagen and image_path.exists() and image_path.is_file():
         image_path.unlink(missing_ok=True)
 
+    scope = "barber" if item.barbero_id is not None else "global"
+    scope_barbero_id = item.barbero_id
+
     db.session.delete(item)
     db.session.commit()
-    normalize_portfolio_order()
+    normalize_portfolio_order(scope, scope_barbero_id)
     return jsonify({"message": "Imagen eliminada del portafolio."})
 
 
@@ -1791,8 +1902,15 @@ def api_admin_portafolio_reorder(image_id):
     if direction not in {"up", "down"}:
         return jsonify({"error": "Dirección inválida. Usa up o down."}), 400
 
-    normalize_portfolio_order()
-    items = get_portfolio_items_ordered(only_active=False)
+    scope = "barber" if item.barbero_id is not None else "global"
+    scope_barbero_id = item.barbero_id
+
+    normalize_portfolio_order(scope, scope_barbero_id)
+    items = get_portfolio_items_ordered(
+        only_active=False,
+        barbero_scope=scope,
+        barbero_id=scope_barbero_id,
+    )
     current_idx = next((i for i, row in enumerate(items) if row.id == item.id), None)
     if current_idx is None:
         return jsonify({"error": "Imagen no encontrada en el orden actual."}), 404
@@ -1805,9 +1923,108 @@ def api_admin_portafolio_reorder(image_id):
     target_item = items[target_idx]
     current_item.sort_order, target_item.sort_order = target_item.sort_order, current_item.sort_order
     db.session.commit()
-    normalize_portfolio_order()
+    normalize_portfolio_order(scope, scope_barbero_id)
 
     return jsonify({"message": "Orden del portafolio actualizado."})
+
+
+@app.route("/api/barbero/portafolio", methods=["GET"])
+@role_required("barbero")
+def api_barbero_portafolio_list():
+    barbero_id = current_user.barbero_id
+    items = [
+        serialize_portfolio_image(p)
+        for p in get_portfolio_items_ordered(
+            only_active=False,
+            barbero_scope="barber",
+            barbero_id=barbero_id,
+        )
+    ]
+    return jsonify(items)
+
+
+@app.route("/api/barbero/portafolio", methods=["POST"])
+@role_required("barbero")
+def api_barbero_portafolio_create():
+    file = request.files.get("imagen")
+    if not file or not file.filename:
+        return jsonify({"error": "Debes seleccionar una imagen."}), 400
+
+    if not allowed_portfolio_file(file.filename):
+        return jsonify({"error": "Formato inválido. Usa PNG, JPG, JPEG o WEBP."}), 400
+
+    PORTFOLIO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = secure_filename(file.filename)
+    ext = safe_name.rsplit(".", 1)[1].lower()
+    final_name = f"portfolio_{uuid4().hex[:12]}.{ext}"
+    file.save(PORTFOLIO_UPLOAD_DIR / final_name)
+
+    barbero_id = current_user.barbero_id
+    item = PortfolioImagen(
+        imagen=final_name,
+        barbero_id=barbero_id,
+        sort_order=get_next_portfolio_order("barber", barbero_id),
+        activo=True,
+    )
+    db.session.add(item)
+    db.session.commit()
+    normalize_portfolio_order("barber", barbero_id)
+
+    return jsonify({"message": "Imagen agregada a tu portafolio.", "item": serialize_portfolio_image(item)}), 201
+
+
+@app.route("/api/barbero/portafolio/<int:image_id>", methods=["DELETE"])
+@role_required("barbero")
+def api_barbero_portafolio_delete(image_id):
+    item = db.session.get(PortfolioImagen, image_id)
+    if not item or item.barbero_id != current_user.barbero_id:
+        return jsonify({"error": "Imagen no encontrada."}), 404
+
+    image_path = PORTFOLIO_UPLOAD_DIR / item.imagen
+    if item.imagen and image_path.exists() and image_path.is_file():
+        image_path.unlink(missing_ok=True)
+
+    db.session.delete(item)
+    db.session.commit()
+    normalize_portfolio_order("barber", current_user.barbero_id)
+    return jsonify({"message": "Imagen eliminada de tu portafolio."})
+
+
+@app.route("/api/barbero/portafolio/<int:image_id>/orden", methods=["PATCH"])
+@role_required("barbero")
+def api_barbero_portafolio_reorder(image_id):
+    item = db.session.get(PortfolioImagen, image_id)
+    if not item or item.barbero_id != current_user.barbero_id:
+        return jsonify({"error": "Imagen no encontrada."}), 404
+
+    data = request.get_json(silent=True) or {}
+    direction = str(data.get("direction", "")).strip().lower()
+    if direction not in {"up", "down"}:
+        return jsonify({"error": "Dirección inválida. Usa up o down."}), 400
+
+    barbero_id = current_user.barbero_id
+    normalize_portfolio_order("barber", barbero_id)
+    items = get_portfolio_items_ordered(
+        only_active=False,
+        barbero_scope="barber",
+        barbero_id=barbero_id,
+    )
+
+    current_idx = next((i for i, row in enumerate(items) if row.id == item.id), None)
+    if current_idx is None:
+        return jsonify({"error": "Imagen no encontrada en el orden actual."}), 404
+
+    target_idx = current_idx - 1 if direction == "up" else current_idx + 1
+    if target_idx < 0 or target_idx >= len(items):
+        return jsonify({"error": "No se puede mover más en esa dirección."}), 400
+
+    current_item = items[current_idx]
+    target_item = items[target_idx]
+    current_item.sort_order, target_item.sort_order = target_item.sort_order, current_item.sort_order
+    db.session.commit()
+    normalize_portfolio_order("barber", barbero_id)
+
+    return jsonify({"message": "Orden de tu portafolio actualizado."})
 
 
 def can_manage_cita(cita):

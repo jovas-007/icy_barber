@@ -121,6 +121,14 @@
     <div class="dash-ops__header">
         <h3>{% if current_user.role == 'admin' %}Operaciones de citas{% else %}Mis citas{% endif %}</h3>
         <div class="dash-ops__header-actions">
+            <div class="dash-ops__filters" id="dash-ops-filters">
+                <button type="button" class="dash-ops__filter-btn dash-ops__filter-btn--active" data-filter="total">
+                    Mis citas <span id="dash-ops-count-total">0</span>
+                </button>
+                <button type="button" class="dash-ops__filter-btn" data-filter="today">
+                    Mis citas hoy <span id="dash-ops-count-today">0</span>
+                </button>
+            </div>
             <button type="button" id="dash-ops-toggle" class="dash-ops__toggle" aria-expanded="false">Mostrar listado</button>
         </div>
     </div>
@@ -175,6 +183,22 @@
         <h4>Próximas configuraciones</h4>
         <p id="dash-service-msg" class="dash-ops__msg"></p>
         <div id="dash-service-list" class="dash-service__list"></div>
+    </article>
+
+    <article class="dash-service__card">
+        <h4>Mi portafolio</h4>
+        <form id="barber-portfolio-form" class="dash-catalog__form dash-catalog__form--portfolio">
+            <div class="dash-catalog__field dash-catalog__field--upload dash-catalog__field--portfolio-upload">
+                <label>Subir imagen de portafolio</label>
+                <div class="dash-catalog-upload dash-catalog-upload--portfolio">
+                    <img id="barber-portfolio-image-preview" src="{{ url_for('static', filename='img/logo_icy.jpeg') }}" alt="Preview portafolio barbero" loading="lazy" decoding="async">
+                    <input id="barber-portfolio-image-file" type="file" name="imagen" accept="image/png,image/jpeg,image/webp" required>
+                    <button type="submit" id="barber-portfolio-image-upload-btn">Subir imagen</button>
+                </div>
+            </div>
+        </form>
+        <p id="barber-portfolio-msg" class="dash-ops__msg"></p>
+        <div id="barber-portfolio-list" class="dash-catalog__list"></div>
     </article>
 </section>
 {% endif %}
@@ -265,7 +289,18 @@
     </section>
 
     <section id="catalog-panel-portafolio" class="dash-catalog__panel" style="display:none;">
+        <div class="dash-portfolio-scope" id="portfolio-admin-scope">
+            <div class="dash-portfolio-scope__tabs">
+                <button type="button" class="dash-catalog__tab dash-catalog__tab--active" data-portfolio-scope="global">Global</button>
+                <button type="button" class="dash-catalog__tab" data-portfolio-scope="barbero">Por barbero</button>
+            </div>
+            <div class="dash-portfolio-scope__filter" id="portfolio-admin-barber-wrap" style="display:none;">
+                <label for="portfolio-admin-barber-select">Barbero</label>
+                <select id="portfolio-admin-barber-select"></select>
+            </div>
+        </div>
         <form id="portfolio-form" class="dash-catalog__form dash-catalog__form--portfolio">
+            <input type="hidden" id="portfolio-barbero-id" name="barbero_id" value="">
             <div class="dash-catalog__field dash-catalog__field--upload dash-catalog__field--portfolio-upload">
                 <label>Subir imagen de portafolio</label>
                 <div class="dash-catalog-upload dash-catalog-upload--portfolio">
@@ -421,6 +456,8 @@ let feedbackTimer = null;
 let confirmResolver = null;
 let catalogItemsState = [];
 let portfolioImagesState = [];
+let portfolioAdminScope = 'global';
+let portfolioAdminBarberId = null;
 
 const HOURS_START = 8;
 const HOURS_END = 18;
@@ -1288,7 +1325,18 @@ async function renderPortfolioList() {
     const msg = document.getElementById('portfolio-msg');
     if (!list || !msg) return;
 
-    const response = await fetch('/api/admin/portafolio');
+    let url = '/api/admin/portafolio';
+    if (portfolioAdminScope === 'barbero') {
+        if (!portfolioAdminBarberId) {
+            list.innerHTML = '<p class="dash-catalog__empty">Selecciona un barbero para ver su portafolio.</p>';
+            return;
+        }
+        url += `?scope=barbero&barbero_id=${portfolioAdminBarberId}`;
+    } else {
+        url += '?scope=global';
+    }
+
+    const response = await fetch(url);
     const data = await response.json();
     if (!response.ok) {
         msg.textContent = data.error || 'No se pudo cargar el portafolio.';
@@ -1310,7 +1358,7 @@ async function renderPortfolioList() {
             <div class="dash-catalog-item__content">
                 <h4>Imagen #${item.id}</h4>
                 <p class="dash-catalog-item__id">Posición: ${item.sort_order || '-'}</p>
-                <p class="dash-catalog-item__desc">Subida para mostrarse en el portafolio público.</p>
+                <p class="dash-catalog-item__desc">${item.barbero_id ? 'Portafolio del barbero seleccionado.' : 'Portafolio público global.'}</p>
             </div>
             <div class="dash-catalog-item__actions">
                 <button type="button" data-act="move-up-portfolio" data-id="${item.id}" ${idx === 0 ? 'disabled' : ''}>Subir</button>
@@ -1327,12 +1375,62 @@ function setupPortfolioAdmin() {
     const msg = document.getElementById('portfolio-msg');
     const fileInput = document.getElementById('portfolio-image-file');
     const preview = document.getElementById('portfolio-image-preview');
-    if (!form || !list || !msg || !fileInput || !preview) return;
+    const scopeWrap = document.getElementById('portfolio-admin-scope');
+    const scopeTabs = scopeWrap ? Array.from(scopeWrap.querySelectorAll('[data-portfolio-scope]')) : [];
+    const barberWrap = document.getElementById('portfolio-admin-barber-wrap');
+    const barberSelect = document.getElementById('portfolio-admin-barber-select');
+    const portfolioBarberoInput = document.getElementById('portfolio-barbero-id');
+    if (!form || !list || !msg || !fileInput || !preview || !portfolioBarberoInput) return;
 
     const setMsg = (text, isError = false) => {
         msg.textContent = text;
         msg.className = isError ? 'dash-ops__msg dash-ops__msg--error' : 'dash-ops__msg dash-ops__msg--ok';
     };
+
+    const populateBarberSelect = () => {
+        if (!barberSelect) return;
+        barberSelect.innerHTML = BARBEROS.map((barbero) => `<option value="${barbero.id}">${barbero.nombre}</option>`).join('');
+        if (!portfolioAdminBarberId && BARBEROS.length) {
+            portfolioAdminBarberId = Number(BARBEROS[0].id);
+        }
+        if (portfolioAdminBarberId) {
+            barberSelect.value = String(portfolioAdminBarberId);
+        }
+    };
+
+    const applyScope = () => {
+        scopeTabs.forEach((tab) => tab.classList.toggle('dash-catalog__tab--active', tab.dataset.portfolioScope === portfolioAdminScope));
+        const isBarbero = portfolioAdminScope === 'barbero';
+        if (barberWrap) {
+            barberWrap.style.display = isBarbero ? '' : 'none';
+        }
+
+        if (isBarbero) {
+            if (!portfolioAdminBarberId && BARBEROS.length) {
+                portfolioAdminBarberId = Number(BARBEROS[0].id);
+            }
+            portfolioBarberoInput.value = portfolioAdminBarberId ? String(portfolioAdminBarberId) : '';
+        } else {
+            portfolioBarberoInput.value = '';
+        }
+    };
+
+    populateBarberSelect();
+    applyScope();
+
+    scopeTabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+            portfolioAdminScope = tab.dataset.portfolioScope === 'barbero' ? 'barbero' : 'global';
+            applyScope();
+            renderPortfolioList();
+        });
+    });
+
+    barberSelect?.addEventListener('change', () => {
+        portfolioAdminBarberId = Number(barberSelect.value || 0) || null;
+        applyScope();
+        renderPortfolioList();
+    });
 
     fileInput.addEventListener('change', () => {
         const file = fileInput.files?.[0];
@@ -1351,6 +1449,9 @@ function setupPortfolioAdmin() {
 
         const body = new FormData();
         body.append('imagen', file);
+        if (portfolioAdminScope === 'barbero' && portfolioAdminBarberId) {
+            body.append('barbero_id', String(portfolioAdminBarberId));
+        }
 
         const response = await fetch('/api/admin/portafolio', {
             method: 'POST',
@@ -1410,6 +1511,134 @@ function setupPortfolioAdmin() {
     });
 
     renderPortfolioList();
+}
+
+async function renderBarberPortfolioList() {
+    const list = document.getElementById('barber-portfolio-list');
+    const msg = document.getElementById('barber-portfolio-msg');
+    if (!list || !msg) return;
+
+    const response = await fetch('/api/barbero/portafolio');
+    const data = await response.json();
+    if (!response.ok) {
+        msg.textContent = data.error || 'No se pudo cargar tu portafolio.';
+        msg.className = 'dash-ops__msg dash-ops__msg--error';
+        return;
+    }
+
+    if (!Array.isArray(data) || !data.length) {
+        list.innerHTML = '<p class="dash-catalog__empty">Aún no tienes imágenes en tu portafolio.</p>';
+        return;
+    }
+
+    list.innerHTML = data.map((item, idx) => `
+        <article class="dash-catalog-item dash-catalog-item--portfolio">
+            <div class="dash-catalog-item__media">
+                <img src="${item.imagen_url}" alt="Imagen portafolio ${item.id}" loading="lazy" decoding="async">
+            </div>
+            <div class="dash-catalog-item__content">
+                <h4>Imagen #${item.id}</h4>
+                <p class="dash-catalog-item__id">Posición: ${item.sort_order || '-'}</p>
+                <p class="dash-catalog-item__desc">Visible en tu perfil público de Equipo.</p>
+            </div>
+            <div class="dash-catalog-item__actions">
+                <button type="button" data-act="move-up-portfolio" data-id="${item.id}" ${idx === 0 ? 'disabled' : ''}>Subir</button>
+                <button type="button" data-act="move-down-portfolio" data-id="${item.id}" ${idx === data.length - 1 ? 'disabled' : ''}>Bajar</button>
+                <button type="button" data-act="delete-portfolio" data-id="${item.id}">Eliminar</button>
+            </div>
+        </article>
+    `).join('');
+}
+
+function setupPortfolioBarbero() {
+    const form = document.getElementById('barber-portfolio-form');
+    const list = document.getElementById('barber-portfolio-list');
+    const msg = document.getElementById('barber-portfolio-msg');
+    const fileInput = document.getElementById('barber-portfolio-image-file');
+    const preview = document.getElementById('barber-portfolio-image-preview');
+    if (!form || !list || !msg || !fileInput || !preview) return;
+
+    const setMsg = (text, isError = false) => {
+        msg.textContent = text;
+        msg.className = isError ? 'dash-ops__msg dash-ops__msg--error' : 'dash-ops__msg dash-ops__msg--ok';
+    };
+
+    fileInput.addEventListener('change', () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        const objectUrl = URL.createObjectURL(file);
+        preview.src = objectUrl;
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const file = fileInput.files?.[0];
+        if (!file) {
+            setMsg('Selecciona una imagen antes de subirla.', true);
+            return;
+        }
+
+        const body = new FormData();
+        body.append('imagen', file);
+
+        const response = await fetch('/api/barbero/portafolio', {
+            method: 'POST',
+            body,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo subir la imagen.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Imagen agregada al portafolio.');
+        showCenterFeedback(data.message || 'Imagen agregada al portafolio.');
+        form.reset();
+        preview.src = '/static/img/logo_icy.jpeg';
+        await renderBarberPortfolioList();
+    });
+
+    list.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+
+        const action = btn.dataset.act;
+        const imageId = Number(btn.dataset.id);
+
+        if (action === 'move-up-portfolio' || action === 'move-down-portfolio') {
+            const response = await fetch(`/api/barbero/portafolio/${imageId}/orden`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ direction: action === 'move-up-portfolio' ? 'up' : 'down' }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                setMsg(data.error || 'No se pudo actualizar el orden.', true);
+                return;
+            }
+
+            setMsg(data.message || 'Orden actualizado.');
+            await renderBarberPortfolioList();
+            return;
+        }
+
+        if (action !== 'delete-portfolio') return;
+        const approved = await openCenterConfirm('¿Eliminar esta imagen de tu portafolio?');
+        if (!approved) return;
+
+        const response = await fetch(`/api/barbero/portafolio/${imageId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) {
+            setMsg(data.error || 'No se pudo eliminar la imagen.', true);
+            return;
+        }
+
+        setMsg(data.message || 'Imagen eliminada del portafolio.');
+        showCenterFeedback(data.message || 'Imagen eliminada del portafolio.');
+        await renderBarberPortfolioList();
+    });
+
+    renderBarberPortfolioList();
 }
 
 function setupCatalogTabs() {
@@ -1491,6 +1720,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (IS_BARBER) {
         setupBarberoService();
         loadBarberoServiceData();
+        setupPortfolioBarbero();
     }
 
     setupCitasOps();
@@ -1806,7 +2036,50 @@ function setupCitasOps() {
     const msg = document.getElementById('dash-ops-msg');
     const opsContent = document.getElementById('dash-ops-content');
     const opsToggle = document.getElementById('dash-ops-toggle');
+    const filtersWrap = document.getElementById('dash-ops-filters');
+    const filterButtons = filtersWrap ? Array.from(filtersWrap.querySelectorAll('[data-filter]')) : [];
+    const countTotal = document.getElementById('dash-ops-count-total');
+    const countToday = document.getElementById('dash-ops-count-today');
     if (!list || !msg || !opsContent || !opsToggle) return;
+
+    let activeFilter = 'total';
+
+    const todayKey = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
+    const filteredRows = () => {
+        if (activeFilter === 'today') {
+            const today = todayKey();
+            return [...citasState]
+                .filter((cita) => String(cita.fecha) === today)
+                .sort((a, b) => (a.hora_inicio || '').localeCompare(b.hora_inicio || ''));
+        }
+
+        return [...citasState].sort((a, b) => (a.fecha + a.hora_inicio).localeCompare(b.fecha + b.hora_inicio));
+    };
+
+    const updateCounts = () => {
+        const today = todayKey();
+        if (countTotal) countTotal.textContent = String(citasState.length);
+        if (countToday) countToday.textContent = String(citasState.filter((cita) => String(cita.fecha) === today).length);
+    };
+
+    const setFilter = (filterValue) => {
+        activeFilter = filterValue === 'today' ? 'today' : 'total';
+        filterButtons.forEach((btn) => btn.classList.toggle('dash-ops__filter-btn--active', btn.dataset.filter === activeFilter));
+    };
+
+    filterButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            setFilter(btn.dataset.filter);
+            render();
+        });
+    });
 
     const setOpsExpanded = (expanded) => {
         opsContent.style.display = expanded ? 'block' : 'none';
@@ -1847,7 +2120,15 @@ function setupCitasOps() {
     };
 
     const render = () => {
-        const rows = [...citasState].sort((a, b) => (a.fecha + a.hora_inicio).localeCompare(b.fecha + b.hora_inicio));
+        const rows = filteredRows();
+        updateCounts();
+
+        if (!rows.length) {
+            const title = activeFilter === 'today' ? 'No hay citas para hoy.' : 'No hay citas registradas.';
+            list.innerHTML = `<p class="dash-catalog__empty">${title}</p>`;
+            return;
+        }
+
         list.innerHTML = rows.map(cita => `
             <article class="dash-ops__card">
                 <div>
@@ -1915,6 +2196,7 @@ function setupCitasOps() {
         renderTimeline();
     });
 
+    setFilter('total');
     render();
 }
 </script>
