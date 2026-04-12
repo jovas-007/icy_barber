@@ -6,7 +6,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/booking.css', v='20260330f') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/booking.css', v='20260411a') }}">
 {% endblock %}
 
 {% block body_class %}booking-page{% endblock %}
@@ -37,10 +37,10 @@
     <div class="booking-navbar__links">
         <a href="#booking-info" class="booking-navbar__link booking-navbar__link--active" data-section="info">Info</a>
         <a href="#booking-services" class="booking-navbar__link" data-section="services">Servicios</a>
-        <a href="#booking-team" class="booking-navbar__link" data-section="team">Equipo</a>
         {% if productos %}
         <a href="#booking-products" class="booking-navbar__link" data-section="products">Productos</a>
         {% endif %}
+        <a href="#booking-team" class="booking-navbar__link" data-section="team">Equipo</a>
     </div>
     <span class="booking-navbar__helper">Reserva 24/7</span>
 </nav>
@@ -167,36 +167,6 @@
         </aside>
     </div>
 
-    <section class="booking-team" id="booking-team">
-        <p class="booking-team__category">Equipo</p>
-        <div class="booking-team__grid">
-            {% for barbero in barberos %}
-            {% set barber_portfolio = team_portfolios.get(barbero.id|string, []) %}
-            <article class="booking-team-card" id="team-barber-{{ barbero.id }}">
-                <div class="booking-team-card__head">
-                    <img src="{{ barbero.avatar_url }}" alt="{{ barbero.nombre }}" class="booking-team-card__avatar" loading="lazy" decoding="async">
-                    <div>
-                        <h3>{{ barbero.nombre }}</h3>
-                        <p>Barbero</p>
-                    </div>
-                </div>
-                <div class="booking-team-card__portfolio-preview">
-                    {% if barber_portfolio %}
-                        {% for image in barber_portfolio[:3] %}
-                        <img src="{{ image.imagen_url }}" alt="Portafolio de {{ barbero.nombre }}" loading="lazy" decoding="async">
-                        {% endfor %}
-                    {% else %}
-                        <div class="booking-team-card__portfolio-empty">Sin imágenes aún</div>
-                    {% endif %}
-                </div>
-                <button type="button" class="booking-team-card__cta" data-open-barber-portfolio="{{ barbero.id }}" data-barber-name="{{ barbero.nombre }}">
-                    Ver portafolio
-                </button>
-            </article>
-            {% endfor %}
-        </div>
-    </section>
-
     {% if productos %}
     <section class="booking-products" id="booking-products">
         <p class="booking-products__category">Productos disponibles</p>
@@ -229,6 +199,42 @@
         </div>
     </section>
     {% endif %}
+
+    <section class="booking-team" id="booking-team">
+        <p class="booking-team__category">Equipo</p>
+        <div class="booking-team__grid">
+            {% for barbero in barberos %}
+            {% set barber_portfolio = team_portfolios.get(barbero.id|string, []) %}
+            {% set barber_remaining = (barber_portfolio | length) - 3 if (barber_portfolio | length) > 3 else 0 %}
+            <article class="booking-team-card" id="team-barber-{{ barbero.id }}">
+                <div class="booking-team-card__head">
+                    <img src="{{ barbero.avatar_url }}" alt="{{ barbero.nombre }}" class="booking-team-card__avatar" loading="lazy" decoding="async">
+                    <div>
+                        <h3>{{ barbero.nombre }}</h3>
+                        <p>Barbero</p>
+                    </div>
+                </div>
+                <div class="booking-team-card__portfolio-preview">
+                    {% if barber_portfolio %}
+                        {% for image in barber_portfolio[:3] %}
+                        <span class="booking-team-card__portfolio-tile">
+                            <img src="{{ image.imagen_url }}" alt="Portafolio de {{ barbero.nombre }}" loading="lazy" decoding="async">
+                            {% if loop.index == 3 and barber_remaining > 0 %}
+                            <span class="booking-team-card__portfolio-more">Ver más +{{ barber_remaining }}</span>
+                            {% endif %}
+                        </span>
+                        {% endfor %}
+                    {% else %}
+                        <div class="booking-team-card__portfolio-empty">Sin imágenes aún</div>
+                    {% endif %}
+                </div>
+                <button type="button" class="booking-team-card__cta" data-open-barber-portfolio="{{ barbero.id }}" data-barber-name="{{ barbero.nombre }}">
+                    Ver portafolio
+                </button>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
 </main>
 
 
@@ -1178,23 +1184,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const bookingNavbar = document.getElementById('booking-navbar');
     const navbarLinks = document.querySelectorAll('.booking-navbar__link');
     const sectionSelectors = {
-        info: '#booking-info .booking-business-card--address',
-        services: '#booking-services .booking-services__category',
-        team: '#booking-team .booking-team__category',
-        products: '#booking-products .booking-products__category',
+        info: '#booking-info',
+        services: '#booking-services',
+        products: '#booking-products',
+        team: '#booking-team',
     };
 
-    const tiePriority = {
-        services: 1,
-        info: 2,
-        team: 3,
-        products: 4,
+    const sectionOrder = {
+        info: 1,
+        services: 2,
+        products: 3,
+        team: 4,
     };
 
     const getSectionTargets = () => Object.entries(sectionSelectors)
         .map(([key, selector]) => ({ key, el: document.querySelector(selector) }))
         .filter((entry) => !!entry.el)
-        .map((entry) => ({ key: entry.key, el: entry.el, top: entry.el.offsetTop }));
+        .map((entry) => ({ key: entry.key, el: entry.el, top: entry.el.getBoundingClientRect().top + window.scrollY }));
 
     const getNavOffset = () => (bookingNavbar?.offsetHeight || 0) + 10;
 
@@ -1224,7 +1230,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = getSectionTargets();
         if (!sections.length) return;
 
-        sections.sort((a, b) => (a.top - b.top) || ((tiePriority[a.key] || 0) - (tiePriority[b.key] || 0)));
+        sections.sort((a, b) => (a.top - b.top) || ((sectionOrder[a.key] || 0) - (sectionOrder[b.key] || 0)));
 
         const marker = window.scrollY + getNavOffset() + 2;
         let activeKey = sections[0].key;

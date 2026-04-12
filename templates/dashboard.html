@@ -7,6 +7,7 @@
 {% endblock %}
 
 {% block body_class %}dashboard-page{% endblock %}
+{% block show_footer %}false{% endblock %}
 
 {% block content %}
 
@@ -185,21 +186,27 @@
         <div id="dash-service-list" class="dash-service__list"></div>
     </article>
 
-    <article class="dash-service__card">
-        <h4>Mi portafolio</h4>
-        <form id="barber-portfolio-form" class="dash-catalog__form dash-catalog__form--portfolio">
-            <div class="dash-catalog__field dash-catalog__field--upload dash-catalog__field--portfolio-upload">
-                <label>Subir imagen de portafolio</label>
-                <div class="dash-catalog-upload dash-catalog-upload--portfolio">
-                    <img id="barber-portfolio-image-preview" src="{{ url_for('static', filename='img/logo_icy.jpeg') }}" alt="Preview portafolio barbero" loading="lazy" decoding="async">
-                    <input id="barber-portfolio-image-file" type="file" name="imagen" accept="image/png,image/jpeg,image/webp" required>
-                    <button type="submit" id="barber-portfolio-image-upload-btn">Subir imagen</button>
-                </div>
+</section>
+
+<section class="dash-catalog" id="dash-barber-portfolios" style="display:none;">
+    <div class="dash-catalog__header">
+        <div>
+            <h3>Mi portafolio</h3>
+            <p>Administra tus imágenes para mostrarlas en la sección Equipo.</p>
+        </div>
+    </div>
+    <form id="barber-portfolio-form" class="dash-catalog__form dash-catalog__form--portfolio">
+        <div class="dash-catalog__field dash-catalog__field--upload dash-catalog__field--portfolio-upload">
+            <label>Subir imagen de portafolio</label>
+            <div class="dash-catalog-upload dash-catalog-upload--portfolio">
+                <img id="barber-portfolio-image-preview" src="{{ url_for('static', filename='img/logo_icy.jpeg') }}" alt="Preview portafolio barbero" loading="lazy" decoding="async">
+                <input id="barber-portfolio-image-file" type="file" name="imagen" accept="image/png,image/jpeg,image/webp" required>
+                <button type="submit" id="barber-portfolio-image-upload-btn">Subir imagen</button>
             </div>
-        </form>
-        <p id="barber-portfolio-msg" class="dash-ops__msg"></p>
-        <div id="barber-portfolio-list" class="dash-catalog__list"></div>
-    </article>
+        </div>
+    </form>
+    <p id="barber-portfolio-msg" class="dash-ops__msg"></p>
+    <div id="barber-portfolio-list" class="dash-catalog__list"></div>
 </section>
 {% endif %}
 
@@ -229,16 +236,12 @@
 <section class="dash-catalog" id="dash-catalog" style="display:none;">
     <div class="dash-catalog__header">
         <div>
-            <h3>Catálogo e inventario</h3>
+            <h3>Catálogo</h3>
             <p>Administra productos, precio y stock de la barbería.</p>
         </div>
         <button type="button" id="catalog-open-create" class="dash-catalog__toggle-btn">Registrar producto</button>
     </div>
-    <div class="dash-catalog__tabs" id="dash-catalog-tabs">
-        <button type="button" class="dash-catalog__tab dash-catalog__tab--active" data-catalog-tab="productos">Productos</button>
-        <button type="button" class="dash-catalog__tab" data-catalog-tab="portafolio">Agregar imagen a Portafolio</button>
-    </div>
-    <section id="catalog-panel-productos" class="dash-catalog__panel dash-catalog__panel--active">
+    <section id="catalog-panel-productos" class="dash-catalog__panel dash-catalog__panel--active" style="display:block;">
     <div id="catalog-form-wrap" class="dash-catalog__form-wrap dash-catalog__form-wrap--hidden">
     <form id="catalog-form" class="dash-catalog__form">
         <input type="hidden" id="catalog-edit-id" name="catalog_edit_id">
@@ -287,8 +290,16 @@
     <p id="catalog-msg" class="dash-ops__msg"></p>
     <div id="catalog-list" class="dash-catalog__list"></div>
     </section>
+</section>
 
-    <section id="catalog-panel-portafolio" class="dash-catalog__panel" style="display:none;">
+<section class="dash-catalog" id="dash-portfolios" style="display:none;">
+    <div class="dash-catalog__header">
+        <div>
+            <h3>Portafolios</h3>
+            <p>Gestiona imágenes globales y por barbero.</p>
+        </div>
+    </div>
+    <section id="catalog-panel-portafolio" class="dash-catalog__panel dash-catalog__panel--active" style="display:block;">
         <div class="dash-portfolio-scope" id="portfolio-admin-scope">
             <div class="dash-portfolio-scope__tabs">
                 <button type="button" class="dash-catalog__tab dash-catalog__tab--active" data-portfolio-scope="global">Global</button>
@@ -411,10 +422,18 @@
         <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         <span class="dash-nav-item__label">Catálogo</span>
     </a>
+    <a href="#" class="dash-nav-item" id="nav-portafolios">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span class="dash-nav-item__label">Portafolios</span>
+    </a>
     {% elif current_user.role == 'barbero' %}
     <a href="#" class="dash-nav-item" id="nav-servicio">
         <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h10"/><path d="M4 17h7"/><circle cx="18" cy="17" r="3"/></svg>
         <span class="dash-nav-item__label">Servicio</span>
+    </a>
+    <a href="#" class="dash-nav-item" id="nav-portafolio-barbero">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span class="dash-nav-item__label">Portafolio</span>
     </a>
     {% endif %}
     <a href="{{ url_for('logout') }}" class="dash-nav-item dash-nav-item--logout" id="nav-salir">
@@ -877,7 +896,9 @@ document.querySelectorAll('.dash-nav-item').forEach(item => {
         const inAgenda = item.id === 'nav-agenda';
         const inClientes = item.id === 'nav-clientes';
         const inCatalogo = item.id === 'nav-catalogo';
+        const inPortafolios = item.id === 'nav-portafolios';
         const inServicio = item.id === 'nav-servicio';
+        const inPortafolioBarbero = item.id === 'nav-portafolio-barbero';
 
         const agendaBlocks = ['admin-barberos-module', 'dash-ops', 'dash-header', 'barber-selector', 'multi-header', 'timeline-single', 'timeline-multi'];
         agendaBlocks.forEach((id) => {
@@ -892,8 +913,14 @@ document.querySelectorAll('.dash-nav-item').forEach(item => {
         const catalogSection = document.getElementById('dash-catalog');
         if (catalogSection) catalogSection.style.display = inCatalogo ? 'block' : 'none';
 
+        const portfoliosSection = document.getElementById('dash-portfolios');
+        if (portfoliosSection) portfoliosSection.style.display = inPortafolios ? 'block' : 'none';
+
         const serviceSection = document.getElementById('dash-service');
         if (serviceSection) serviceSection.style.display = inServicio ? 'block' : 'none';
+
+        const barberPortfolioSection = document.getElementById('dash-barber-portfolios');
+        if (barberPortfolioSection) barberPortfolioSection.style.display = inPortafolioBarbero ? 'block' : 'none';
 
         if (inClientes && IS_ADMIN) {
             renderClientsAnalytics();
@@ -903,8 +930,16 @@ document.querySelectorAll('.dash-nav-item').forEach(item => {
             renderCatalogList();
         }
 
+        if (inPortafolios && IS_ADMIN) {
+            renderPortfolioList();
+        }
+
         if (inServicio && IS_BARBER) {
             loadBarberoServiceData();
+        }
+
+        if (inPortafolioBarbero && IS_BARBER) {
+            renderBarberPortfolioList();
         }
     });
 });
@@ -1641,31 +1676,6 @@ function setupPortfolioBarbero() {
     renderBarberPortfolioList();
 }
 
-function setupCatalogTabs() {
-    const tabsWrap = document.getElementById('dash-catalog-tabs');
-    const tabs = tabsWrap ? Array.from(tabsWrap.querySelectorAll('[data-catalog-tab]')) : [];
-    const panelProductos = document.getElementById('catalog-panel-productos');
-    const panelPortafolio = document.getElementById('catalog-panel-portafolio');
-    const createBtn = document.getElementById('catalog-open-create');
-    if (!tabs.length || !panelProductos || !panelPortafolio || !createBtn) return;
-
-    const switchTab = (name) => {
-        const isProductos = name === 'productos';
-        tabs.forEach((tab) => tab.classList.toggle('dash-catalog__tab--active', tab.dataset.catalogTab === name));
-        panelProductos.style.display = isProductos ? '' : 'none';
-        panelPortafolio.style.display = isProductos ? 'none' : '';
-        createBtn.style.display = isProductos ? '' : 'none';
-
-        if (!isProductos) {
-            renderPortfolioList();
-        }
-    };
-
-    tabs.forEach((tab) => {
-        tab.addEventListener('click', () => switchTab(tab.dataset.catalogTab));
-    });
-}
-
 // ─── Init ──────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     const singleBtnText = document.getElementById('view-single-btn');
@@ -1713,7 +1723,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setupAdminBarberos();
         setupCatalogoAdmin();
         setupPortfolioAdmin();
-        setupCatalogTabs();
         renderClientsAnalytics();
     }
 
@@ -2052,21 +2061,37 @@ function setupCitasOps() {
         return `${y}-${m}-${d}`;
     };
 
+    const citaEndDate = (cita) => {
+        const endTime = (cita.hora_fin || cita.hora_inicio || '00:00').slice(0, 5);
+        const endDate = new Date(`${cita.fecha}T${endTime}:00`);
+        if (Number.isNaN(endDate.getTime())) return null;
+        return endDate;
+    };
+
+    const isUpcoming = (cita) => {
+        const endDate = citaEndDate(cita);
+        if (!endDate) return false;
+        return endDate >= new Date();
+    };
+
+    const upcomingRows = () => [...citasState].filter((cita) => isUpcoming(cita));
+
     const filteredRows = () => {
         if (activeFilter === 'today') {
             const today = todayKey();
-            return [...citasState]
+            return upcomingRows()
                 .filter((cita) => String(cita.fecha) === today)
                 .sort((a, b) => (a.hora_inicio || '').localeCompare(b.hora_inicio || ''));
         }
 
-        return [...citasState].sort((a, b) => (a.fecha + a.hora_inicio).localeCompare(b.fecha + b.hora_inicio));
+        return upcomingRows().sort((a, b) => (a.fecha + a.hora_inicio).localeCompare(b.fecha + b.hora_inicio));
     };
 
     const updateCounts = () => {
         const today = todayKey();
-        if (countTotal) countTotal.textContent = String(citasState.length);
-        if (countToday) countToday.textContent = String(citasState.filter((cita) => String(cita.fecha) === today).length);
+        const upcoming = upcomingRows();
+        if (countTotal) countTotal.textContent = String(upcoming.length);
+        if (countToday) countToday.textContent = String(upcoming.filter((cita) => String(cita.fecha) === today).length);
     };
 
     const setFilter = (filterValue) => {
@@ -2124,7 +2149,7 @@ function setupCitasOps() {
         updateCounts();
 
         if (!rows.length) {
-            const title = activeFilter === 'today' ? 'No hay citas para hoy.' : 'No hay citas registradas.';
+            const title = activeFilter === 'today' ? 'No hay citas pendientes para hoy.' : 'No hay citas pendientes por delante.';
             list.innerHTML = `<p class="dash-catalog__empty">${title}</p>`;
             return;
         }

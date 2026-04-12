@@ -1392,13 +1392,6 @@
     gap: var(--space-sm);
 }
 
-.dash-catalog__tabs {
-    margin-top: var(--space-md);
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
 .dash-catalog__tab {
     border: 1px solid var(--color-border);
     background: #fff;
@@ -1945,11 +1938,6 @@
 
     .dash-catalog__toggle-btn {
         width: 100%;
-    }
-
-    .dash-catalog__tabs {
-        display: grid;
-        grid-template-columns: 1fr;
     }
 
     .dash-portfolio-scope {
