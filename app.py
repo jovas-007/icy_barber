@@ -4,6 +4,7 @@ import json
 import smtplib
 import ssl
 from email.message import EmailMessage
+from html import escape as html_escape
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from datetime import date, datetime, timedelta
@@ -539,15 +540,21 @@ def build_public_cancel_url(cancel_token):
 def build_booking_confirmation_email(customer_name, citas_rows):
         citas_rows = list(citas_rows or [])
         total = len(citas_rows)
+        shop_name = html_escape(str(BARBERSHOP_INFO.get("name") or "Icy Barber"))
+        shop_address = html_escape(str(BARBERSHOP_INFO.get("address") or ""))
+
         title = f"Reserva confirmada en {BARBERSHOP_INFO['name']}"
         intro = f"Hola {customer_name}, tu reservación quedó confirmada." if customer_name else "Tu reservación quedó confirmada."
         summary_label = "1 cita" if total == 1 else f"{total} citas"
+        preheader = f"{summary_label} confirmada(s) en {BARBERSHOP_INFO['name']}."
 
         html_cards = []
         text_rows = []
         for row in citas_rows:
-                service_name = row.servicio.nombre if row.servicio else "Servicio"
-                barber_name = row.barbero.nombre if row.barbero else "Barbero"
+                service_name_raw = row.servicio.nombre if row.servicio else "Servicio"
+                barber_name_raw = row.barbero.nombre if row.barbero else "Barbero"
+                service_name = html_escape(str(service_name_raw))
+                barber_name = html_escape(str(barber_name_raw))
                 fecha_label = row.fecha.strftime("%d/%m/%Y")
                 hora_inicio = row.hora_inicio.strftime("%H:%M")
                 hora_fin = row.hora_fin.strftime("%H:%M")
@@ -556,51 +563,100 @@ def build_booking_confirmation_email(customer_name, citas_rows):
                 action_html = ""
                 action_text = ""
                 if cancel_url:
-                        action_html = (
-                                f"<a href='{cancel_url}' style='display:inline-block;background:#8b1d2c;color:#fff;text-decoration:none;"
-                                f"padding:12px 18px;border-radius:999px;font-weight:700'>Cancelar cita</a>"
-                        )
+                        cancel_url_safe = html_escape(cancel_url)
+                        action_html = f"""
+                        <tr>
+                            <td style="padding:0 16px 16px 16px;">
+                                <a href="{cancel_url_safe}" style="display:block;background:#9f1239;color:#ffffff;text-decoration:none;padding:11px 14px;border-radius:10px;font-weight:700;font-size:14px;text-align:center;">
+                                    Cancelar cita
+                                </a>
+                            </td>
+                        </tr>
+                        """
                         action_text = f"Cancelación: {cancel_url}"
 
                 html_cards.append(
                         f"""
-                        <div style="background:#fff7f5;border:1px solid #f2d6cf;border-radius:18px;padding:18px 18px 16px;margin:0 0 14px">
-                            <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start">
-                                <div>
-                                    <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8b1d2c;font-weight:800;margin-bottom:6px">{service_name}</div>
-                                    <div style="font-size:18px;font-weight:800;color:#111827;line-height:1.2">{fecha_label}</div>
-                                    <div style="font-size:14px;color:#4b5563;margin-top:4px">{hora_inicio} - {hora_fin} · {barber_name}</div>
-                                </div>
-                                <div style="min-width:160px;text-align:right">{action_html}</div>
-                            </div>
-                        </div>
+                        <tr>
+                            <td style="padding:0 0 12px 0;">
+                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #f2d6cf;background:#fff7f5;border-radius:14px;">
+                                    <tr>
+                                        <td style="padding:16px;">
+                                            <p style="margin:0 0 8px 0;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#9f1239;font-weight:800;">{service_name}</p>
+                                            <p style="margin:0 0 6px 0;font-size:24px;line-height:1.1;color:#111827;font-weight:800;">{fecha_label}</p>
+                                            <p style="margin:0;font-size:14px;line-height:1.5;color:#374151;">{hora_inicio} - {hora_fin} · {barber_name}</p>
+                                        </td>
+                                    </tr>
+                                    {action_html}
+                                </table>
+                            </td>
+                        </tr>
                         """
                 )
-                text_rows.append(f"- {fecha_label} | {hora_inicio}-{hora_fin} | {service_name} | {barber_name}")
+                text_rows.append(f"- {fecha_label} | {hora_inicio}-{hora_fin} | {service_name_raw} | {barber_name_raw}")
                 if action_text:
                         text_rows.append(action_text)
 
         html = f"""
-        <div style="font-family:Arial,sans-serif;background:linear-gradient(180deg,#faf7f5 0%,#ffffff 100%);padding:24px;color:#111827">
-            <div style="max-width:680px;margin:0 auto;background:#fff;border-radius:24px;overflow:hidden;border:1px solid #eaded9;box-shadow:0 18px 48px rgba(17,24,39,.08)">
-                <div style="background:linear-gradient(135deg,#111827 0%,#2b1714 55%,#8b1d2c 100%);padding:28px 28px 22px;color:#fff">
-                    <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.8;font-weight:700">{BARBERSHOP_INFO['name']}</div>
-                    <h2 style="margin:10px 0 8px;font-size:28px;line-height:1.1">{title}</h2>
-                    <p style="margin:0;max-width:560px;color:rgba(255,255,255,.88);line-height:1.55">{intro}</p>
-                </div>
-                <div style="padding:26px 28px 28px">
-                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-                        <span style="background:#111827;color:#fff;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:700">{summary_label}</span>
-                        <span style="background:#f3f4f6;color:#374151;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:600">{BARBERSHOP_INFO['address']}</span>
-                    </div>
-                    {''.join(html_cards)}
-                    <div style="margin-top:20px;padding-top:18px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:12px;line-height:1.6">
-                        Si no solicitaste esta reserva, ignora este correo. Si quieres reagendar o cancelar, usa el botón de cada cita antes de que la atiendan.
-                    </div>
-                </div>
+        <!doctype html>
+        <html lang="es">
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{html_escape(title)}</title>
+        </head>
+        <body style="margin:0;padding:0;background:#f3f4f6;">
+            <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+                {html_escape(preheader)}
             </div>
-        </div>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f3f4f6;">
+                <tr>
+                    <td align="center" style="padding:18px 10px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+                            <tr>
+                                <td style="padding:24px 20px;background:#111827;">
+                                    <p style="margin:0 0 10px 0;font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:#d1d5db;font-weight:700;">{shop_name}</p>
+                                    <h1 style="margin:0 0 10px 0;font-size:34px;line-height:1.12;color:#ffffff;font-weight:800;">{html_escape(title)}</h1>
+                                    <p style="margin:0;font-size:16px;line-height:1.55;color:#e5e7eb;">{html_escape(intro)}</p>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="padding:16px 20px 6px 20px;">
+                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                        <tr>
+                                            <td style="background:#111827;border-radius:999px;padding:7px 12px;color:#ffffff;font-size:12px;font-weight:700;">{html_escape(summary_label)}</td>
+                                        </tr>
+                                    </table>
+                                    <p style="margin:10px 0 0 0;font-size:13px;line-height:1.5;color:#4b5563;">{shop_address}</p>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="padding:12px 20px 6px 20px;">
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                        {''.join(html_cards)}
+                                    </table>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="padding:14px 20px 22px 20px;border-top:1px solid #e5e7eb;">
+                                    <p style="margin:0;font-size:12px;line-height:1.65;color:#6b7280;">
+                                        Si no solicitaste esta reserva, ignora este correo.<br>
+                                        Si quieres reagendar o cancelar, usa el botón de cada cita antes de que la atiendan.
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
         """
+
         text = "\n".join([
                 title,
                 intro,
