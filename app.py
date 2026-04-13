@@ -8,6 +8,7 @@ from html import escape as html_escape
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from functools import wraps
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -23,6 +24,13 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 load_dotenv()
+
+# Configurar zona horaria para México (América/México_City)
+os.environ['TZ'] = 'America/Mexico_City'
+
+def get_today_mx():
+    """Obtener fecha actual en zona horaria de México."""
+    return datetime.now(ZoneInfo('America/Mexico_City')).date()
 
 
 def normalize_database_uri(uri):
@@ -137,7 +145,7 @@ DAY_NAMES = {1: "Lunes", 2: "Martes", 3: "Miercoles", 4: "Jueves", 5: "Viernes",
 
 def build_dynamic_schedule():
     """Build the weekly schedule from the earliest/latest barber hours per day."""
-    today_iso = date.today().isoweekday()
+    today_iso = get_today_mx().isoweekday()
     schedule = []
     today_hours = ""
 
@@ -186,7 +194,7 @@ def inject_barbershop_info():
         info["schedule"] = schedule
         info["today_hours"] = today_hours
     except Exception:
-        today_iso = date.today().isoweekday()
+        today_iso = get_today_mx().isoweekday()
         schedule = []
         for row in BARBERSHOP_INFO["schedule"]:
             entry = dict(row)
@@ -940,7 +948,7 @@ def generate_available_slots(barbero_id, fecha_cita, duracion_minutos, step_minu
     if not ranges:
         return []
 
-    is_today = fecha_cita == date.today()
+    is_today = fecha_cita == get_today_mx()
     now_minutes = None
     if is_today:
         now_dt = datetime.now()
@@ -1044,7 +1052,7 @@ def generate_available_slots_bulk(barbero_ids, fecha_cita, duracion_minutos, ste
     for cita in existing_citas:
         existing_by_barbero.setdefault(cita.barbero_id, []).append(cita)
 
-    is_today = fecha_cita == date.today()
+    is_today = fecha_cita == get_today_mx()
     now_minutes = None
     if is_today:
         now_dt = datetime.now()
@@ -2432,7 +2440,7 @@ def api_barbero_servicio_get():
     if not barbero:
         return jsonify({"error": "No se encontró el perfil del barbero."}), 404
 
-    today = date.today()
+    today = get_today_mx()
     excepciones = (
         ExcepcionDisponibilidadBarbero.query
         .filter(ExcepcionDisponibilidadBarbero.barbero_id == barbero.id)
@@ -2594,7 +2602,7 @@ def api_estadisticas_clientes():
     citas_canceladas = sum(1 for c in citas if c.estado == 'cancelada')
     
     # Citas por día de la semana (últimos 30 días)
-    today = date.today()
+    today = get_today_mx()
     hace_30_dias = today - timedelta(days=30)
     dias_semana_count = defaultdict(int)
     dias_semana_nombres = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
