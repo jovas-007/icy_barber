@@ -3,6 +3,7 @@ import re
 import json
 import smtplib
 import ssl
+from calendar import monthrange
 from email.message import EmailMessage
 from html import escape as html_escape
 from urllib.error import HTTPError, URLError
@@ -236,6 +237,7 @@ class Barbero(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(180), nullable=True)
+    instagram_url = db.Column(db.String(255), nullable=True)
     avatar = db.Column(db.String(255), nullable=False, default="camilo.jpg")
     telefono = db.Column(db.String(30), nullable=True)
     activo = db.Column(db.Boolean, default=True, nullable=False)
@@ -437,6 +439,31 @@ def normalize_phone_10(raw_phone):
     if len(digits) != 10:
         return None
     return digits
+
+
+def normalize_instagram_url(raw_value):
+    value = str(raw_value or "").strip()
+    if not value:
+        return None
+
+    value = value.replace(" ", "")
+    value = value.removeprefix("@").strip()
+
+    if re.fullmatch(r"[A-Za-z0-9._]+", value):
+        value = f"https://www.instagram.com/{value}/"
+    else:
+        if value.startswith(("instagram.com/", "www.instagram.com/")):
+            value = f"https://{value.lstrip('/')}"
+        elif not value.startswith(("http://", "https://")):
+            value = f"https://{value.lstrip('/')}"
+
+    if not re.search(r"instagram\.com/[A-Za-z0-9._]+", value, re.IGNORECASE):
+        return None
+
+    if "?" in value or "#" in value:
+        return value.rstrip("/")
+
+    return value.rstrip("/") + "/"
 
 
 def send_resend_email_smtp(recipients, subject, html, text=None, reply_to=None):
@@ -768,6 +795,95 @@ def ensure_cita_public_columns():
             db.session.commit()
         except Exception:
             db.session.rollback()
+
+
+def ensure_barbero_public_columns():
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    if "barberos" not in table_names:
+        return
+
+    columns = {col["name"] for col in inspector.get_columns("barberos")}
+    if "instagram_url" not in columns:
+        db.session.execute(text("ALTER TABLE barberos ADD COLUMN instagram_url VARCHAR(255) NULL"))
+        db.session.commit()
+
+
+def add_months(base_date, months_delta):
+    year = base_date.year + ((base_date.month - 1 + months_delta) // 12)
+    month = ((base_date.month - 1 + months_delta) % 12) + 1
+    day = min(base_date.day, monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def build_historial_response(scope="global", barbero_id=None):
+    today = get_today_mx()
+    current_month_start = date(today.year, today.month, 1)
+    months = [add_months(current_month_start, offset) for offset in (-2, -1, 0)]
+    range_start = months[0]
+    range_end = add_months(current_month_start, 1)
+
+    query = (
+        Cita.query
+        .join(Cliente, Cita.cliente_id == Cliente.id)
+        .outerjoin(Barbero, Cita.barbero_id == Barbero.id)
+        .outerjoin(Servicio, Cita.servicio_id == Servicio.id)
+        .filter(Cita.fecha >= range_start)
+        .filter(Cita.fecha < range_end)
+    )
+
+    if scope == "barbero" and barbero_id:
+        query = query.filter(Cita.barbero_id == barbero_id)
+
+    rows = query.order_by(Cita.fecha.desc(), Cita.hora_inicio.desc(), Cita.id.desc()).all()
+    items = []
+    month_names = {
+        1: "Enero",
+        2: "Febrero",
+        3: "Marzo",
+        4: "Abril",
+        5: "Mayo",
+        6: "Junio",
+        7: "Julio",
+        8: "Agosto",
+        9: "Septiembre",
+        10: "Octubre",
+        11: "Noviembre",
+        12: "Diciembre",
+    }
+    for cita in rows:
+        cliente = cita.cliente
+        barbero = cita.barbero
+        servicio = cita.servicio
+        items.append(
+            {
+                "id": cita.id,
+                "cliente_id": cita.cliente_id,
+                "cliente": f"{cliente.nombres} {cliente.apellidos}".strip() if cliente else "Cliente",
+                "telefono": cliente.telefono if cliente else "",
+                "email": cliente.email if cliente else "",
+                "barbero_id": cita.barbero_id,
+                "barbero": barbero.nombre if barbero else "Barbero",
+                "servicio": servicio.nombre if servicio else "Servicio",
+                "fecha": cita.fecha.isoformat(),
+                "hora_inicio": cita.hora_inicio.strftime("%H:%M"),
+                "hora_fin": cita.hora_fin.strftime("%H:%M"),
+                "estado": cita.estado,
+            }
+        )
+
+    return {
+        "months": [
+            {
+                "value": month_start.strftime("%Y-%m"),
+                "label": f"{month_names[month_start.month]} {month_start.year}",
+            }
+            for month_start in months
+        ],
+        "items": items,
+        "scope": scope,
+        "barbero_id": barbero_id,
+    }
 
 
 def ensure_sample_products():
@@ -1236,6 +1352,7 @@ def serialize_barbero(barbero):
         "id": barbero.id,
         "nombre": barbero.nombre,
         "email": barbero.email,
+        "instagram_url": barbero.instagram_url,
         "avatar": avatar_filename,
         "telefono": barbero.telefono,
         "username": username,
@@ -1803,6 +1920,7 @@ def api_admin_barberos_create():
     nombre = data.get("nombre", "").strip()
     telefono = normalize_phone_10(data.get("telefono", ""))
     email = data.get("email", "").strip().lower() or None
+    instagram_url = normalize_instagram_url(data.get("instagram_url"))
     avatar = normalize_avatar_name(data.get("avatar", DEFAULT_AVATAR))
     username = data.get("username", "").strip()
     password_temporal = data.get("password_temporal", "").strip()
@@ -1834,7 +1952,10 @@ def api_admin_barberos_create():
     if hora_fin <= hora_inicio:
         return jsonify({"error": "La hora fin debe ser mayor que la hora inicio."}), 400
 
-    barbero = Barbero(nombre=nombre, telefono=telefono, email=email, avatar=avatar, activo=True)
+    if data.get("instagram_url") and not instagram_url:
+        return jsonify({"error": "El link de Instagram no tiene un formato válido."}), 400
+
+    barbero = Barbero(nombre=nombre, telefono=telefono, email=email, instagram_url=instagram_url, avatar=avatar, activo=True)
     db.session.add(barbero)
     db.session.flush()
 
@@ -1869,6 +1990,7 @@ def api_admin_barberos_update(barbero_id):
     nombre = data.get("nombre", barbero.nombre).strip()
     telefono = normalize_phone_10(data.get("telefono", barbero.telefono or ""))
     email = data.get("email", barbero.email or "").strip().lower() or None
+    instagram_url = normalize_instagram_url(data.get("instagram_url", barbero.instagram_url or ""))
     avatar = normalize_avatar_name(data.get("avatar", barbero.avatar or DEFAULT_AVATAR))
 
     if not nombre or not telefono:
@@ -1877,6 +1999,9 @@ def api_admin_barberos_update(barbero_id):
     if not email:
         return jsonify({"error": "El correo es obligatorio."}), 400
 
+    if data.get("instagram_url") and not instagram_url:
+        return jsonify({"error": "El link de Instagram no tiene un formato válido."}), 400
+
     existing_email_owner = Barbero.query.filter(Barbero.email == email, Barbero.id != barbero_id).first() if email else None
     if existing_email_owner:
         return jsonify({"error": "Ya existe otro barbero con ese email."}), 409
@@ -1884,6 +2009,7 @@ def api_admin_barberos_update(barbero_id):
     barbero.nombre = nombre
     barbero.telefono = telefono
     barbero.email = email
+    barbero.instagram_url = instagram_url
     barbero.avatar = avatar
 
     dias_data = data.get("dias_semana")
@@ -2671,18 +2797,34 @@ def api_estadisticas_clientes():
     })
 
 
+@app.route("/api/historial", methods=["GET"])
+@login_required
+def api_historial_clientes():
+    if current_user.role == "admin":
+        barbero_id = request.args.get("barbero_id", type=int)
+        scope = "barbero" if barbero_id else "global"
+        return jsonify(build_historial_response(scope=scope, barbero_id=barbero_id))
+
+    if current_user.role == "barbero":
+        return jsonify(build_historial_response(scope="barbero", barbero_id=current_user.barbero_id))
+
+    return jsonify({"error": "No tienes permisos para ver este historial."}), 403
+
+
 with app.app_context():
     if should_bootstrap():
         db.create_all()
         ensure_product_image_column()
         ensure_portfolio_table()
         ensure_barbero_service_tables()
+        ensure_barbero_public_columns()
         ensure_cita_public_columns()
         seed_data()
     else:
         ensure_product_image_column()
         ensure_portfolio_table()
         ensure_barbero_service_tables()
+        ensure_barbero_public_columns()
         ensure_cita_public_columns()
 
     ensure_sample_products()

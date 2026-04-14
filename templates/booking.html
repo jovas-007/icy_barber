@@ -209,9 +209,20 @@
             <article class="booking-team-card" id="team-barber-{{ barbero.id }}">
                 <div class="booking-team-card__head">
                     <img src="{{ barbero.avatar_url }}" alt="{{ barbero.nombre }}" class="booking-team-card__avatar" loading="lazy" decoding="async">
-                    <div>
+                    <div class="booking-team-card__identity">
                         <h3>{{ barbero.nombre }}</h3>
                         <p>Barbero</p>
+                    </div>
+                    <div class="booking-team-card__socials">
+                        {% if barbero.instagram_url %}
+                        <a href="{{ barbero.instagram_url }}" class="booking-team-card__social-link" target="_blank" rel="noopener noreferrer" aria-label="Instagram de {{ barbero.nombre }}">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" ry="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.2" cy="6.8" r="1.1"/></svg>
+                        </a>
+                        {% else %}
+                        <span class="booking-team-card__social-link booking-team-card__social-link--disabled" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" ry="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.2" cy="6.8" r="1.1"/></svg>
+                        </span>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="booking-team-card__portfolio-preview">
@@ -423,6 +434,7 @@ const SHOP_CONTEXT = {
     name: {{ shop.name | tojson }},
     address: {{ shop.address | tojson }},
 };
+const CUSTOMER_CACHE_KEY = 'icy_barber_customer_cache';
 
 const bookingState = {
     currentServiceId: null,
@@ -437,6 +449,54 @@ const bookingState = {
 const DISPONIBILIDAD_CACHE_TTL_MS = 2 * 60 * 1000;
 const disponibilidadCache = new Map();
 const disponibilidadInFlight = new Map();
+
+function readCustomerCache() {
+    try {
+        return JSON.parse(localStorage.getItem(CUSTOMER_CACHE_KEY) || '{}') || {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function saveCustomerCache(customer) {
+    if (!customer) return;
+
+    const email = String(customer.email || '').trim().toLowerCase();
+    const telefono = String(customer.telefono || '').replace(/\D/g, '');
+    if (!email || telefono.length !== 10) return;
+
+    try {
+        const cache = readCustomerCache();
+        cache[`${email}|${telefono}`] = {
+            nombres: String(customer.nombres || '').trim(),
+            apellidos: String(customer.apellidos || '').trim(),
+            email,
+            telefono,
+            updatedAt: Date.now(),
+        };
+        localStorage.setItem(CUSTOMER_CACHE_KEY, JSON.stringify(cache));
+    } catch (error) {
+        // No bloquear la reserva si el almacenamiento local falla.
+    }
+}
+
+function autofillCustomerFromCache() {
+    if (!nombresInput || !apellidosInput || !telefonoInput || !emailInput) return;
+
+    const email = String(emailInput.value || '').trim().toLowerCase();
+    const telefono = String(telefonoInput.value || '').replace(/\D/g, '');
+    if (!email || telefono.length !== 10) return;
+
+    const entry = readCustomerCache()[`${email}|${telefono}`];
+    if (!entry) return;
+
+    if (!nombresInput.value.trim() && entry.nombres) {
+        nombresInput.value = entry.nombres;
+    }
+    if (!apellidosInput.value.trim() && entry.apellidos) {
+        apellidosInput.value = entry.apellidos;
+    }
+}
 
 const modal = document.getElementById('booking-modal');
 const detailsModal = document.getElementById('booking-details-modal');
@@ -981,6 +1041,7 @@ async function confirmBooking() {
 
         bookingState.items = [];
         customerForm.reset();
+        saveCustomerCache(customer);
         renderItemsModal();
         closeDetailsModal();
         showBookingSuccess(customer, data.citas || [], bookedItemsSnapshot);
@@ -1013,6 +1074,12 @@ document.addEventListener('DOMContentLoaded', () => {
             emailInput.value = emailInput.value.trimStart();
         });
     }
+
+    [emailInput, telefonoInput].forEach((input) => {
+        if (!input) return;
+        input.addEventListener('blur', autofillCustomerFromCache);
+        input.addEventListener('change', autofillCustomerFromCache);
+    });
 
     const showInlineError = (text) => setModalStatus(text, true);
 

@@ -49,6 +49,11 @@
         </div>
 
         <div class="admin-field">
+            <label for="instagram_url">Link Instagram (opcional)</label>
+            <input id="instagram_url" type="url" name="instagram_url" placeholder="https://www.instagram.com/tu_usuario">
+        </div>
+
+        <div class="admin-field">
             <label for="username">Usuario</label>
             <input id="username" type="text" name="username" required>
         </div>
@@ -211,6 +216,45 @@
 {% endif %}
 
 {% if current_user.role == 'admin' %}
+<section class="dash-history" id="dash-history" style="display:none;">
+    <div class="dash-history__header">
+        <div>
+            <h3>Historial</h3>
+            <p>Clientes únicos que han reservado en los últimos 3 meses. Puedes ver el alcance global o por barbero.</p>
+        </div>
+        <div class="dash-history__header-actions">
+            <label for="dash-history-barbero" class="dash-history__label">Barbero</label>
+            <select id="dash-history-barbero" class="dash-history__select">
+                <option value="">Global</option>
+                {% for barbero in barberos %}
+                <option value="{{ barbero.id }}">{{ barbero.nombre }}</option>
+                {% endfor %}
+            </select>
+            <label for="dash-history-month" class="dash-history__label">Mes</label>
+            <select id="dash-history-month" class="dash-history__select"></select>
+        </div>
+    </div>
+    <div class="dash-history__cards" id="dash-history-cards"></div>
+    <div class="dash-history-list" id="dash-history-list"></div>
+</section>
+{% elif current_user.role == 'barbero' %}
+<section class="dash-history" id="dash-history" style="display:none;">
+    <div class="dash-history__header">
+        <div>
+            <h3>Historial</h3>
+            <p>Clientes únicos que han reservado contigo en los últimos 3 meses.</p>
+        </div>
+        <div class="dash-history__header-actions">
+            <label for="dash-history-month" class="dash-history__label">Mes</label>
+            <select id="dash-history-month" class="dash-history__select"></select>
+        </div>
+    </div>
+    <div class="dash-history__cards" id="dash-history-cards"></div>
+    <div class="dash-history-list" id="dash-history-list"></div>
+</section>
+{% endif %}
+
+{% if current_user.role == 'admin' %}
 <section class="dash-clients" id="dash-clients" style="display:none;">
     <div class="dash-clients__header">
         <div class="dash-clients__header-top">
@@ -235,10 +279,6 @@
             <div id="chart-monthly" class="dash-chart"></div>
         </article>
     </div>
-    <article class="dash-history-card">
-        <h4>Historial reciente de citas</h4>
-        <div id="dash-history-list" class="dash-history-list"></div>
-    </article>
 </section>
 
 <section class="dash-catalog" id="dash-catalog" style="display:none;">
@@ -426,6 +466,10 @@
         <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span class="dash-nav-item__label">Clientes</span>
     </a>
+    <a href="#" class="dash-nav-item" id="nav-historial">
+        <svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        <span class="dash-nav-item__label">Historial</span>
+    </a>
     <a href="#" class="dash-nav-item" id="nav-catalogo">
         <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         <span class="dash-nav-item__label">Catálogo</span>
@@ -438,6 +482,10 @@
     <a href="#" class="dash-nav-item" id="nav-servicio">
         <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h10"/><path d="M4 17h7"/><circle cx="18" cy="17" r="3"/></svg>
         <span class="dash-nav-item__label">Servicio</span>
+    </a>
+    <a href="#" class="dash-nav-item" id="nav-historial">
+        <svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        <span class="dash-nav-item__label">Historial</span>
     </a>
     <a href="#" class="dash-nav-item" id="nav-portafolio-barbero">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -485,6 +533,13 @@ let catalogItemsState = [];
 let portfolioImagesState = [];
 let portfolioAdminScope = 'global';
 let portfolioAdminBarberId = null;
+let historialState = {
+    items: [],
+    months: [],
+    selectedMonth: '',
+    selectedBarberoId: null,
+    cacheKey: '',
+};
 
 const HOURS_START = 8;
 const HOURS_END = 18;
@@ -903,6 +958,7 @@ document.querySelectorAll('.dash-nav-item').forEach(item => {
 
         const inAgenda = item.id === 'nav-agenda';
         const inClientes = item.id === 'nav-clientes';
+        const inHistorial = item.id === 'nav-historial';
         const inCatalogo = item.id === 'nav-catalogo';
         const inPortafolios = item.id === 'nav-portafolios';
         const inServicio = item.id === 'nav-servicio';
@@ -918,6 +974,9 @@ document.querySelectorAll('.dash-nav-item').forEach(item => {
         const clientsSection = document.getElementById('dash-clients');
         if (clientsSection) clientsSection.style.display = inClientes ? 'block' : 'none';
 
+    const historySection = document.getElementById('dash-history');
+    if (historySection) historySection.style.display = inHistorial ? 'block' : 'none';
+
         const catalogSection = document.getElementById('dash-catalog');
         if (catalogSection) catalogSection.style.display = inCatalogo ? 'block' : 'none';
 
@@ -932,6 +991,10 @@ document.querySelectorAll('.dash-nav-item').forEach(item => {
 
         if (inClientes && IS_ADMIN) {
             renderClientsAnalytics();
+        }
+
+        if (inHistorial) {
+            loadHistorialData().catch((err) => console.error(err));
         }
 
         if (inCatalogo && IS_ADMIN) {
@@ -1108,9 +1171,8 @@ function renderBarChart(containerId, rows, keyField, valueField) {
 
 function renderClientsAnalytics() {
     const cards = document.getElementById('dash-clients-cards');
-    const history = document.getElementById('dash-history-list');
     const monthSelector = document.getElementById('dash-clients-month');
-    if (!cards || !history || !monthSelector) return;
+    if (!cards || !monthSelector) return;
 
     const now = new Date();
     const monthOptions = [];
@@ -1166,21 +1228,133 @@ function renderClientsAnalytics() {
 
     renderBarChart('chart-daily', dayRows, 'dia', 'total');
     renderBarChart('chart-monthly', [{ mes: selectedMonthLabel, total: monthCitas.length }], 'mes', 'total');
+}
 
-    const rows = monthCitas
-        .sort((a, b) => (b.fecha + b.hora_inicio).localeCompare(a.fecha + a.hora_inicio))
-        .slice(0, 20);
+function renderHistorial() {
+    const cards = document.getElementById('dash-history-cards');
+    const list = document.getElementById('dash-history-list');
+    const monthSelector = document.getElementById('dash-history-month');
+    const historySelect = document.getElementById('dash-history-barbero');
+    if (!cards || !list || !monthSelector) return;
 
-    history.innerHTML = rows.map((c) => `
-        <div class="dash-history-item">
-            <div class="dash-history-item__head">
-                <strong>${c.cliente}</strong>
-                <span class="dash-history-item__status dash-history-item__status--${getStatusClass(c.estado)}">${c.estado}</span>
-            </div>
-            <span>${c.fecha} · ${c.hora_inicio} - ${c.hora_fin}</span>
-            <span>${c.servicio}</span>
-        </div>
-    `).join('');
+    if (!historialState.months.length) {
+        cards.innerHTML = '<p class="dash-history__empty">No hay información de historial todavía.</p>';
+        list.innerHTML = '';
+        return;
+    }
+
+    if (!monthSelector.dataset.bound) {
+        monthSelector.innerHTML = historialState.months.map((item) => `<option value="${item.value}">${item.label}</option>`).join('');
+        monthSelector.value = historialState.selectedMonth || historialState.months[historialState.months.length - 1]?.value || '';
+        monthSelector.dataset.bound = '1';
+        monthSelector.addEventListener('change', () => {
+            historialState.selectedMonth = monthSelector.value;
+            renderHistorial();
+        });
+    }
+
+    if (historySelect && !historySelect.dataset.bound) {
+        historySelect.addEventListener('change', () => {
+            historialState.selectedBarberoId = historySelect.value ? Number(historySelect.value) : null;
+            historialState.cacheKey = '';
+            loadHistorialData().catch((err) => console.error(err));
+        });
+        historySelect.dataset.bound = '1';
+    }
+
+    const selectedMonth = monthSelector.value || historialState.selectedMonth || historialState.months[historialState.months.length - 1]?.value || '';
+    historialState.selectedMonth = selectedMonth;
+
+    const monthItems = historialState.items.filter((item) => item.fecha.startsWith(selectedMonth));
+    const grouped = new Map();
+    monthItems.forEach((item) => {
+        const clientKey = String(item.cliente_id || `${item.cliente}|${item.telefono}`);
+        const sortKey = `${item.fecha} ${item.hora_inicio}`;
+        const current = grouped.get(clientKey) || {
+            ...item,
+            count: 0,
+            lastSortKey: sortKey,
+            latest: item,
+        };
+
+        current.count += 1;
+        if (sortKey >= current.lastSortKey) {
+            current.lastSortKey = sortKey;
+            current.latest = item;
+        }
+        grouped.set(clientKey, current);
+    });
+
+    const rows = [...grouped.values()].sort((a, b) => b.lastSortKey.localeCompare(a.lastSortKey));
+    const totalReservations = monthItems.length;
+    const uniqueClients = rows.length;
+    const latestRow = rows[0]?.latest || rows[0] || null;
+    const scopeLabel = IS_ADMIN && historySelect && historySelect.value
+        ? `Barbero: ${historySelect.options[historySelect.selectedIndex]?.text || 'Barbero'}`
+        : (IS_ADMIN ? 'Global' : 'Mis clientes');
+
+    cards.innerHTML = `
+        <article class="dash-kpi-card"><h4>Clientes únicos</h4><p>${uniqueClients}</p></article>
+        <article class="dash-kpi-card"><h4>Reservas del mes</h4><p>${totalReservations}</p></article>
+        <article class="dash-kpi-card"><h4>Alcance</h4><p>${scopeLabel}</p></article>
+        <article class="dash-kpi-card"><h4>Última reserva</h4><p>${latestRow ? `${latestRow.fecha} ${latestRow.hora_inicio}` : '-'}</p></article>
+    `;
+
+    if (!rows.length) {
+        list.innerHTML = '<p class="dash-history__empty">No hay clientes en este mes para el filtro seleccionado.</p>';
+        return;
+    }
+
+    list.innerHTML = rows.map((item) => {
+        const latest = item.latest || item;
+        return `
+            <article class="dash-history-item dash-history-item--client">
+                <div class="dash-history-item__avatar">${(item.cliente || 'C').trim().charAt(0).toUpperCase()}</div>
+                <div class="dash-history-item__body">
+                    <strong>${item.cliente}</strong>
+                    <span>${item.telefono || ''} ${item.email ? '· ' + item.email : ''}</span>
+                    <span>${item.count} reserva${item.count === 1 ? '' : 's'} · Última: ${latest.fecha} ${latest.hora_inicio} · ${latest.servicio}</span>
+                </div>
+                <div class="dash-history-item__meta">
+                    <span class="dash-history-item__status dash-history-item__status--${getStatusClass(latest.estado)}">${latest.estado}</span>
+                    <small>${latest.barbero}</small>
+                </div>
+            </article>
+        `;
+    }).join('');
+}
+
+async function loadHistorialData() {
+    const historySelect = document.getElementById('dash-history-barbero');
+    const params = new URLSearchParams();
+    const previousMonth = historialState.selectedMonth;
+
+    if (IS_ADMIN && historySelect && historySelect.value) {
+        params.set('barbero_id', historySelect.value);
+        historialState.selectedBarberoId = Number(historySelect.value);
+    } else if (IS_ADMIN) {
+        historialState.selectedBarberoId = null;
+    }
+
+    const cacheKey = `${IS_ADMIN ? 'admin' : 'barbero'}:${historialState.selectedBarberoId || 'global'}`;
+    if (historialState.cacheKey === cacheKey && historialState.items.length) {
+        renderHistorial();
+        return;
+    }
+
+    const response = await fetch(`/api/historial${params.toString() ? `?${params.toString()}` : ''}`);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || 'No se pudo cargar el historial.');
+    }
+
+    historialState.items = data.items || [];
+    historialState.months = data.months || [];
+    historialState.selectedMonth = historialState.months.some((month) => month.value === previousMonth)
+        ? previousMonth
+        : (historialState.months[historialState.months.length - 1]?.value || '');
+    historialState.cacheKey = cacheKey;
+    renderHistorial();
 }
 
 async function renderCatalogList() {
@@ -1772,6 +1946,7 @@ function setupAdminBarberos() {
     const avatarPreview = document.getElementById('avatar-preview');
     const avatarHidden = document.getElementById('avatar-hidden');
     const telefonoInput = document.getElementById('telefono');
+    const instagramInput = document.getElementById('instagram_url');
 
     if (!form || !list || !msg) return;
 
@@ -1790,6 +1965,7 @@ function setupAdminBarberos() {
         msg.textContent = '';
         avatarHidden.value = 'camilo.jpg';
         avatarPreview.src = '/static/img/camilo.jpg';
+        if (instagramInput) instagramInput.value = '';
         setSelectedDays([1,2,3,4,5]);
         openCreateBtn.textContent = 'Registrar barbero';
     };
@@ -1865,7 +2041,7 @@ function setupAdminBarberos() {
                         <img src="${item.avatar_url}" alt="${item.nombre}" loading="lazy" decoding="async">
                         <div>
                             <strong>${item.nombre}</strong>
-                            <p>${item.telefono || ''} ${item.email ? '· ' + item.email : ''}</p>
+                            <p>${item.telefono || ''} ${item.email ? '· ' + item.email : ''}${item.instagram_url ? ' · Instagram' : ''}</p>
                             <p>Horario: ${item.dias_trabajo || '-'} ${item.hora_inicio || ''} ${item.hora_fin ? '- ' + item.hora_fin : ''}</p>
                         </div>
                     </div>
@@ -2042,6 +2218,7 @@ function setupAdminBarberos() {
             form.nombre.value = barbero.nombre || '';
             form.telefono.value = barbero.telefono || '';
             form.email.value = barbero.email || '';
+            if (instagramInput) instagramInput.value = barbero.instagram_url || '';
             form.avatar.value = barbero.avatar || '';
             avatarHidden.value = barbero.avatar || 'camilo.jpg';
             avatarPreview.src = barbero.avatar_url || '/static/img/camilo.jpg';
