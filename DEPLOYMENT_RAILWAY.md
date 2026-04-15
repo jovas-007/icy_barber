@@ -89,7 +89,7 @@ Configuración recomendada (la de tu screenshot):
 Notas importantes:
 
 - Railway permite **un solo volume por servicio**.
-- La app enlaza `uploads` y `portfolio` al volume, pero mantiene URLs públicas en `/static/img/...`.
+- La app guarda `uploads` y `portfolio` en el volume y los sirve por `/media/...`.
 - Si las imágenes ya se perdieron en un deploy anterior, debes volver a subirlas (no se recuperan solas).
 
 ---

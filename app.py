@@ -3,7 +3,6 @@ import re
 import json
 import smtplib
 import ssl
-import shutil
 from calendar import monthrange
 from email.message import EmailMessage
 from html import escape as html_escape
@@ -17,7 +16,7 @@ from urllib.parse import quote_plus
 from uuid import uuid4
 
 from dotenv import load_dotenv
-from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from PIL import Image, ImageOps
 from flask_sqlalchemy import SQLAlchemy
@@ -92,66 +91,74 @@ RESEND_SMTP_FALLBACK_ENABLED = os.getenv("RESEND_SMTP_FALLBACK", "true").strip()
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_IMG_DIR = BASE_DIR / "static" / "img"
 PERSISTENT_MEDIA_ROOT = os.getenv("PERSISTENT_MEDIA_ROOT", "").strip()
+MEDIA_PUBLIC_PREFIXES = ("uploads/", "portfolio/")
 
 
-def _copy_missing_media(source_dir, target_dir):
-    if not source_dir.exists() or not source_dir.is_dir():
-        return
+def normalize_media_relative_path(path_value):
+    normalized = str(path_value or "").replace("\\", "/").lstrip("/")
+    if not normalized:
+        return None
 
-    for source_path in source_dir.iterdir():
-        target_path = target_dir / source_path.name
-        if target_path.exists():
-            continue
+    if normalized == ".." or normalized.startswith("../") or "/../" in normalized:
+        return None
 
-        if source_path.is_dir():
-            shutil.copytree(source_path, target_path)
-        else:
-            shutil.copy2(source_path, target_path)
+    return normalized
 
 
-def _link_media_dir(static_dir, persistent_dir):
-    persistent_dir.mkdir(parents=True, exist_ok=True)
-    static_dir.parent.mkdir(parents=True, exist_ok=True)
+def is_persistent_media_path(relative_path):
+    normalized = normalize_media_relative_path(relative_path)
+    if not normalized:
+        return False
+    return any(normalized.startswith(prefix) for prefix in MEDIA_PUBLIC_PREFIXES)
 
-    if static_dir.is_symlink():
-        try:
-            if static_dir.resolve() == persistent_dir.resolve():
-                return
-        except OSError:
-            pass
-        static_dir.unlink(missing_ok=True)
 
-    if static_dir.exists():
-        if static_dir.is_dir():
-            _copy_missing_media(static_dir, persistent_dir)
-            shutil.rmtree(static_dir)
-        else:
-            static_dir.unlink()
+def media_file_exists(relative_path):
+    normalized = normalize_media_relative_path(relative_path)
+    if not normalized:
+        return False
 
-    static_dir.symlink_to(persistent_dir, target_is_directory=True)
+    static_path = STATIC_IMG_DIR / normalized
+    if static_path.exists():
+        return True
+
+    if PERSISTENT_MEDIA_ROOT and is_persistent_media_path(normalized):
+        persistent_path = Path(PERSISTENT_MEDIA_ROOT) / normalized
+        if persistent_path.exists():
+            return True
+
+    return False
+
+
+def build_media_url(relative_path):
+    normalized = normalize_media_relative_path(relative_path)
+    if not normalized:
+        return None
+
+    if PERSISTENT_MEDIA_ROOT and is_persistent_media_path(normalized):
+        return url_for("serve_persistent_media", media_path=normalized)
+
+    return url_for("static", filename=f"img/{normalized}")
 
 
 def configure_media_dirs():
+    if PERSISTENT_MEDIA_ROOT:
+        persistent_root = Path(PERSISTENT_MEDIA_ROOT)
+        persistent_uploads = persistent_root / "uploads"
+        persistent_portfolio = persistent_root / "portfolio"
+        try:
+            persistent_uploads.mkdir(parents=True, exist_ok=True)
+            persistent_portfolio.mkdir(parents=True, exist_ok=True)
+            return persistent_uploads, persistent_uploads, persistent_portfolio
+        except OSError as exc:
+            app.logger.warning("No se pudo inicializar media persistente en %s: %s", persistent_root, exc)
+
     uploads_dir = STATIC_IMG_DIR / "uploads"
     portfolio_dir = STATIC_IMG_DIR / "portfolio"
-
-    if not PERSISTENT_MEDIA_ROOT:
-        uploads_dir.mkdir(parents=True, exist_ok=True)
-        portfolio_dir.mkdir(parents=True, exist_ok=True)
-        return uploads_dir, uploads_dir, portfolio_dir
-
-    persistent_root = Path(PERSISTENT_MEDIA_ROOT)
-    persistent_uploads = persistent_root / "uploads"
-    persistent_portfolio = persistent_root / "portfolio"
-
     try:
-        _link_media_dir(uploads_dir, persistent_uploads)
-        _link_media_dir(portfolio_dir, persistent_portfolio)
-    except OSError as exc:
-        app.logger.warning("No se pudo inicializar media persistente en %s: %s", persistent_root, exc)
         uploads_dir.mkdir(parents=True, exist_ok=True)
         portfolio_dir.mkdir(parents=True, exist_ok=True)
-
+    except OSError as exc:
+        app.logger.warning("No se pudo inicializar media local en static: %s", exc)
     return uploads_dir, uploads_dir, portfolio_dir
 
 
@@ -497,8 +504,7 @@ def normalize_avatar_name(value):
 
 def resolve_avatar_filename(value):
     avatar = normalize_avatar_name(value)
-    avatar_path = BASE_DIR / "static" / "img" / avatar
-    if avatar_path.exists():
+    if media_file_exists(avatar):
         return avatar
     return DEFAULT_AVATAR
 
@@ -1445,7 +1451,7 @@ def serialize_barbero(barbero):
         "dias_trabajo": dias_trabajo,
         "hora_inicio": hora_inicio.strftime("%H:%M") if hora_inicio else None,
         "hora_fin": hora_fin.strftime("%H:%M") if hora_fin else None,
-        "avatar_url": url_for("static", filename="img/" + avatar_filename),
+        "avatar_url": build_media_url(avatar_filename),
         "activo": barbero.activo,
     }
 
@@ -1496,7 +1502,7 @@ def serialize_barberos_batch(barberos):
                 "dias_trabajo": dias_trabajo,
                 "hora_inicio": hora_inicio.strftime("%H:%M") if hora_inicio else None,
                 "hora_fin": hora_fin.strftime("%H:%M") if hora_fin else None,
-                "avatar_url": url_for("static", filename="img/" + avatar_filename),
+                "avatar_url": build_media_url(avatar_filename),
                 "activo": barbero.activo,
             }
         )
@@ -1537,7 +1543,7 @@ def serialize_producto(producto):
         "nombre": producto.nombre,
         "detalles": producto.detalles or "",
         "imagen": image_name,
-        "imagen_url": url_for("static", filename=f"img/{image_name}") if image_name else None,
+        "imagen_url": build_media_url(image_name) if image_name else None,
         "precio": int(producto.precio or 0),
         "stock": int(producto.stock or 0),
         "activo": bool(producto.activo),
@@ -1568,7 +1574,7 @@ def serialize_portfolio_image(item):
         "id": item.id,
         "barbero_id": item.barbero_id,
         "imagen": item.imagen,
-        "imagen_url": url_for("static", filename=f"img/portfolio/{item.imagen}"),
+        "imagen_url": build_media_url(f"portfolio/{item.imagen}"),
         "sort_order": item.sort_order,
         "activo": bool(item.activo),
         "created_at": item.created_at.isoformat() if item.created_at else None,
@@ -1639,6 +1645,18 @@ def get_next_portfolio_order(barbero_scope="global", barbero_id=None):
 
 def get_payload():
     return request.get_json(silent=True) or request.form
+
+
+@app.route("/media/<path:media_path>")
+def serve_persistent_media(media_path):
+    if not PERSISTENT_MEDIA_ROOT:
+        abort(404)
+
+    normalized = normalize_media_relative_path(media_path)
+    if not normalized or not is_persistent_media_path(normalized):
+        abort(404)
+
+    return send_from_directory(Path(PERSISTENT_MEDIA_ROOT), normalized)
 
 
 def auto_complete_overdue_citas():
@@ -2046,7 +2064,7 @@ def api_admin_barberos_avatar_upload():
         {
             "message": "Imagen subida y optimizada correctamente.",
             "avatar": f"uploads/{final_name}",
-            "avatar_url": url_for("static", filename=f"img/uploads/{final_name}"),
+            "avatar_url": build_media_url(f"uploads/{final_name}"),
         }
     )
 
@@ -2340,7 +2358,7 @@ def api_admin_catalogo_image_upload():
         {
             "message": "Imagen de producto subida correctamente.",
             "imagen": f"uploads/{final_name}",
-            "imagen_url": url_for("static", filename=f"img/uploads/{final_name}"),
+            "imagen_url": build_media_url(f"uploads/{final_name}"),
         }
     )
 
