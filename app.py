@@ -21,6 +21,7 @@ from flask_login import LoginManager, UserMixin, current_user, login_required, l
 from PIL import Image, ImageOps
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
+from sqlalchemy.orm import joinedload
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -66,6 +67,10 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
 app.config["SQLALCHEMY_DATABASE_URI"] = build_database_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping": True,
+    "pool_recycle": int(os.getenv("SQLALCHEMY_POOL_RECYCLE", "3600")),
+}
 app.config["SERVER_NAME"] = os.getenv("SERVER_NAME", "127.0.0.1:8000")
 _static_max_age_env = os.getenv("STATIC_MAX_AGE", "604800").strip()
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = int(_static_max_age_env) if _static_max_age_env.isdigit() else 604800
@@ -1381,6 +1386,60 @@ def serialize_barbero(barbero):
     }
 
 
+def serialize_barberos_batch(barberos):
+    barberos = list(barberos)
+    if not barberos:
+        return []
+
+    barbero_ids = [barbero.id for barbero in barberos]
+    dias_map = {1: "Lun", 2: "Mar", 3: "Mie", 4: "Jue", 5: "Vie", 6: "Sab", 7: "Dom"}
+
+    horarios_por_barbero = {}
+    for horario in HorarioBarbero.query.filter(
+        HorarioBarbero.barbero_id.in_(barbero_ids),
+        HorarioBarbero.activo.is_(True),
+    ).all():
+        horarios_por_barbero.setdefault(horario.barbero_id, []).append(horario)
+
+    usernames_por_barbero = {
+        user.barbero_id: user.username
+        for user in User.query.filter(
+            User.barbero_id.in_(barbero_ids),
+            User.activo.is_(True),
+        ).all()
+        if user.barbero_id is not None
+    }
+
+    result = []
+    for barbero in barberos:
+        horarios = horarios_por_barbero.get(barbero.id, [])
+        dias_semana = sorted(h.dia_semana for h in horarios)
+        dias_trabajo = ", ".join(dias_map.get(h.dia_semana, str(h.dia_semana)) for h in horarios)
+        hora_inicio = min((h.hora_inicio for h in horarios), default=None)
+        hora_fin = max((h.hora_fin for h in horarios), default=None)
+        avatar_filename = resolve_avatar_filename(barbero.avatar)
+
+        result.append(
+            {
+                "id": barbero.id,
+                "nombre": barbero.nombre,
+                "email": barbero.email,
+                "instagram_url": barbero.instagram_url,
+                "avatar": avatar_filename,
+                "telefono": barbero.telefono,
+                "username": usernames_por_barbero.get(barbero.id),
+                "dias_semana": dias_semana,
+                "dias_trabajo": dias_trabajo,
+                "hora_inicio": hora_inicio.strftime("%H:%M") if hora_inicio else None,
+                "hora_fin": hora_fin.strftime("%H:%M") if hora_fin else None,
+                "avatar_url": url_for("static", filename="img/" + avatar_filename),
+                "activo": barbero.activo,
+            }
+        )
+
+    return result
+
+
 SERVICE_ICONS = {
     "corte": '<svg class="service-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
     "barba": '<svg class="service-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c-4 0-8-2.5-8-8V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8c0 5.5-4 8-8 8Z"/><path d="M8 10v2c0 2.2 1.8 4 4 4s4-1.8 4-4v-2"/><line x1="8" y1="6" x2="8" y2="8"/><line x1="16" y1="6" x2="16" y2="8"/></svg>',
@@ -1537,27 +1596,24 @@ def auto_complete_overdue_citas():
 
 @app.route("/")
 def booking():
-    barberos = [serialize_barbero(b) for b in Barbero.query.filter_by(activo=True).order_by(Barbero.id.asc()).all()]
+    active_barbers = Barbero.query.filter_by(activo=True).order_by(Barbero.id.asc()).all()
+    barberos = serialize_barberos_batch(active_barbers)
     servicios = [serialize_servicio(s) for s in Servicio.query.filter_by(activo=True).all()]
     productos = [
         serialize_producto(p)
         for p in ProductoInventario.query.filter_by(activo=True).order_by(ProductoInventario.id.asc()).all()
     ]
-    portfolio_images = [
-        serialize_portfolio_image(p)
-        for p in get_portfolio_items_ordered(only_active=True, barbero_scope="global")
+    portfolio_items = [
+        item for item in PortfolioImagen.query.filter_by(activo=True).order_by(PortfolioImagen.sort_order.asc(), PortfolioImagen.id.asc()).all()
     ]
-    team_portfolios = {
-        str(barbero["id"]): [
+    portfolio_images = [serialize_portfolio_image(item) for item in portfolio_items if item.barbero_id is None]
+    team_portfolios = {}
+    for barbero in barberos:
+        team_portfolios[str(barbero["id"])] = [
             serialize_portfolio_image(item)
-            for item in get_portfolio_items_ordered(
-                only_active=True,
-                barbero_scope="barber",
-                barbero_id=barbero["id"],
-            )
+            for item in portfolio_items
+            if item.barbero_id == barbero["id"]
         ]
-        for barbero in barberos
-    }
     return render_template(
         "booking.html",
         barberos=barberos,
@@ -1607,8 +1663,11 @@ def logout():
 @role_required("admin")
 def dashboard_admin():
     auto_complete_overdue_citas()
-    barberos = [serialize_barbero(b) for b in Barbero.query.filter_by(activo=True).all()]
-    citas = [serialize_cita(c) for c in Cita.query.order_by(Cita.id.asc()).all()]
+    barberos = serialize_barberos_batch(Barbero.query.filter_by(activo=True).order_by(Barbero.id.asc()).all())
+    citas = [
+        serialize_cita(c)
+        for c in Cita.query.options(joinedload(Cita.cliente), joinedload(Cita.servicio)).order_by(Cita.id.asc()).all()
+    ]
     return render_template(
         "dashboard.html",
         barberos=barberos,
@@ -1626,10 +1685,10 @@ def dashboard_barbero():
         flash("No se encontró el perfil del barbero", "error")
         return redirect(url_for("booking"))
 
-    barberos = [serialize_barbero(barbero)]
+    barberos = serialize_barberos_batch([barbero])
     citas = [
         serialize_cita(c)
-        for c in Cita.query.filter_by(barbero_id=barbero.id).order_by(Cita.id.asc()).all()
+        for c in Cita.query.options(joinedload(Cita.cliente), joinedload(Cita.servicio)).filter_by(barbero_id=barbero.id).order_by(Cita.id.asc()).all()
     ]
     return render_template(
         "dashboard.html",
@@ -1641,7 +1700,7 @@ def dashboard_barbero():
 
 @app.route("/api/barberos")
 def api_barberos():
-    return jsonify([serialize_barbero(b) for b in Barbero.query.filter_by(activo=True).order_by(Barbero.id.asc()).all()])
+    return jsonify(serialize_barberos_batch(Barbero.query.filter_by(activo=True).order_by(Barbero.id.asc()).all()))
 
 
 @app.route("/api/servicios")
@@ -1688,7 +1747,7 @@ def api_disponibilidad():
         {
             "servicio_id": servicio_id,
             "fecha": fecha_cita.isoformat(),
-            "barberos": [serialize_barbero(b) for b in barberos],
+            "barberos": serialize_barberos_batch(barberos),
             "slots": slots,
         }
     )
@@ -1699,9 +1758,9 @@ def api_disponibilidad():
 def api_citas():
     auto_complete_overdue_citas()
     if current_user.role == "admin":
-        citas = Cita.query.order_by(Cita.id.asc()).all()
+        citas = Cita.query.options(joinedload(Cita.cliente), joinedload(Cita.servicio)).order_by(Cita.id.asc()).all()
     elif current_user.role == "barbero":
-        citas = Cita.query.filter_by(barbero_id=current_user.barbero_id).order_by(Cita.id.asc()).all()
+        citas = Cita.query.options(joinedload(Cita.cliente), joinedload(Cita.servicio)).filter_by(barbero_id=current_user.barbero_id).order_by(Cita.id.asc()).all()
     else:
         citas = []
     return jsonify([serialize_cita(c) for c in citas])
@@ -1891,7 +1950,7 @@ def api_create_citas_public_batch():
 @app.route("/api/admin/barberos", methods=["GET"])
 @role_required("admin")
 def api_admin_barberos_list():
-    barberos = [serialize_barbero(b) for b in Barbero.query.order_by(Barbero.id.asc()).all()]
+    barberos = serialize_barberos_batch(Barbero.query.order_by(Barbero.id.asc()).all())
     return jsonify(barberos)
 
 
