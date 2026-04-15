@@ -2989,7 +2989,7 @@ with app.app_context():
         ensure_cita_public_columns()
 
     ensure_sample_products()
-    sync_service_catalog(reset_citas_on_change=True)
+    sync_service_catalog(reset_citas_on_change=False)
     ensure_admin_from_env()
 
 
