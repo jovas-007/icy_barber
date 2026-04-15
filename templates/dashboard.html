@@ -235,7 +235,31 @@
         </div>
     </div>
     <div class="dash-history__cards" id="dash-history-cards"></div>
+    
+    <!-- Barra de búsqueda y filtros -->
+    <div class="dash-history__filters">
+        <input 
+            type="text" 
+            id="dash-history-search" 
+            class="dash-history__search" 
+            placeholder="Buscar por nombre del cliente..."
+            aria-label="Buscar cliente"
+        />
+        <select id="dash-history-sort" class="dash-history__sort" aria-label="Ordenar clientes">
+            <option value="fecha-desc">Más reciente</option>
+            <option value="alfabetico-asc">A - Z</option>
+            <option value="alfabetico-desc">Z - A</option>
+            <option value="frecuencia">Más frecuente</option>
+            <option value="frecuencia-desc">Menos frecuente</option>
+        </select>
+    </div>
+    
+    <!-- Contenedor scrollable con centinela para infinite scroll -->
     <div class="dash-history-list" id="dash-history-list"></div>
+    <div id="hist-sentinel" class="hist-sentinel"></div>
+    <div id="hist-loading" class="hist-loading-spinner" style="display:none;">
+        <span>Cargando más clientes...</span>
+    </div>
 </section>
 {% elif current_user.role == 'barbero' %}
 <section class="dash-history" id="dash-history" style="display:none;">
@@ -250,7 +274,31 @@
         </div>
     </div>
     <div class="dash-history__cards" id="dash-history-cards"></div>
+    
+    <!-- Barra de búsqueda y filtros -->
+    <div class="dash-history__filters">
+        <input 
+            type="text" 
+            id="dash-history-search" 
+            class="dash-history__search" 
+            placeholder="Buscar por nombre del cliente..."
+            aria-label="Buscar cliente"
+        />
+        <select id="dash-history-sort" class="dash-history__sort" aria-label="Ordenar clientes">
+            <option value="fecha-desc">Más reciente</option>
+            <option value="alfabetico-asc">A - Z</option>
+            <option value="alfabetico-desc">Z - A</option>
+            <option value="frecuencia">Más frecuente</option>
+            <option value="frecuencia-desc">Menos frecuente</option>
+        </select>
+    </div>
+    
+    <!-- Contenedor scrollable con centinela para infinite scroll -->
     <div class="dash-history-list" id="dash-history-list"></div>
+    <div id="hist-sentinel" class="hist-sentinel"></div>
+    <div id="hist-loading" class="hist-loading-spinner" style="display:none;">
+        <span>Cargando más clientes...</span>
+    </div>
 </section>
 {% endif %}
 
@@ -539,6 +587,19 @@ let historialState = {
     selectedMonth: '',
     selectedBarberoId: null,
     cacheKey: '',
+    // Estado de búsqueda/filtro
+    searchQuery: '',
+    sortBy: 'fecha-desc',
+    // Paginación backend
+    serverOffset: 0,
+    limit: 10,
+    total: 0,
+    serverHasMore: false,
+    // Paginación visible en cliente (10 por "página" de scroll)
+    visibleCount: 10,
+    hasMore: false,
+    isLoading: false,
+    allItems: [],
 };
 
 const HOURS_START = 8;
@@ -588,6 +649,42 @@ function byStartTime(a, b) {
     const bStart = timeToMinutes(b.hora_inicio);
     if (aStart !== bStart) return aStart - bStart;
     return timeToMinutes(a.hora_fin) - timeToMinutes(b.hora_fin);
+}
+
+function normalizePhoneDigits(value) {
+    return String(value || '').replace(/\D/g, '');
+}
+
+function buildCallLink(phoneDigits) {
+    const digits = normalizePhoneDigits(phoneDigits);
+    if (!digits) return null;
+    return `tel:+52${digits}`;
+}
+
+function buildWhatsAppLink(phoneDigits) {
+    const digits = normalizePhoneDigits(phoneDigits);
+    if (!digits) return null;
+    return `https://wa.me/52${digits}`;
+}
+
+function historyActionIcon(type) {
+    if (type === 'call') {
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.94.34 1.85.66 2.73a2 2 0 0 1-.45 2.11L8.27 9.67a16 16 0 0 0 6.06 6.06l1.11-1.05a2 2 0 0 1 2.11-.45c.88.32 1.79.54 2.73.66A2 2 0 0 1 22 16.92Z"/></svg>`;
+    }
+
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L2 21l1.9-5.7A8.38 8.38 0 0 1 3 11.5 8.5 8.5 0 0 1 7.7 3.9 8.38 8.38 0 0 1 11.5 3h.5a8.48 8.48 0 0 1 8 8.5Z"/><path d="M8 12h8"/><path d="M8 9h5"/></svg>`;
+}
+
+function createHistoryActionButton({ href, label, type, disabled = false }) {
+    const icon = historyActionIcon(type);
+    const targetAttr = type === 'message' ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const className = disabled ? 'dash-history-item__action dash-history-item__action--disabled' : 'dash-history-item__action';
+    const resolvedHref = href || '#';
+    if (disabled) {
+        return `<span class="${className}" title="${label}" aria-label="${label}">${icon}</span>`;
+    }
+
+    return `<a class="${className}" href="${resolvedHref}" title="${label}" aria-label="${label}"${targetAttr}>${icon}</a>`;
 }
 
 function showCenterFeedback(message, isError = false) {
@@ -1230,44 +1327,42 @@ function renderClientsAnalytics() {
     renderBarChart('chart-monthly', [{ mes: selectedMonthLabel, total: monthCitas.length }], 'mes', 'total');
 }
 
-function renderHistorial() {
-    const cards = document.getElementById('dash-history-cards');
-    const list = document.getElementById('dash-history-list');
+// Debounce para búsqueda en tiempo real
+let searchTimeout;
+function debounceSearch(fn, delay = 300) {
+    return function(...args) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => fn(...args), delay);
+    };
+}
+
+function historyEmptyStateMarkup(message, hint = '') {
+    return `
+        <div class="dash-history__empty-state" role="status" aria-live="polite">
+            <span class="dash-history__empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="8"></circle>
+                    <path d="M9 12h6"></path>
+                    <path d="M12 9v6"></path>
+                </svg>
+            </span>
+            <p>${message}</p>
+            ${hint ? `<small>${hint}</small>` : ''}
+        </div>
+    `;
+}
+
+// Aplicar filtros de búsqueda, ordenamiento en cliente
+function applyHistorialFilters() {
     const monthSelector = document.getElementById('dash-history-month');
-    const historySelect = document.getElementById('dash-history-barbero');
-    if (!cards || !list || !monthSelector) return;
-
-    if (!historialState.months.length) {
-        cards.innerHTML = '<p class="dash-history__empty">No hay información de historial todavía.</p>';
-        list.innerHTML = '';
-        return;
-    }
-
-    if (!monthSelector.dataset.bound) {
-        monthSelector.innerHTML = historialState.months.map((item) => `<option value="${item.value}">${item.label}</option>`).join('');
-        monthSelector.value = historialState.selectedMonth || historialState.months[historialState.months.length - 1]?.value || '';
-        monthSelector.dataset.bound = '1';
-        monthSelector.addEventListener('change', () => {
-            historialState.selectedMonth = monthSelector.value;
-            renderHistorial();
-        });
-    }
-
-    if (historySelect && !historySelect.dataset.bound) {
-        historySelect.addEventListener('change', () => {
-            historialState.selectedBarberoId = historySelect.value ? Number(historySelect.value) : null;
-            historialState.cacheKey = '';
-            loadHistorialData().catch((err) => console.error(err));
-        });
-        historySelect.dataset.bound = '1';
-    }
-
-    const selectedMonth = monthSelector.value || historialState.selectedMonth || historialState.months[historialState.months.length - 1]?.value || '';
-    historialState.selectedMonth = selectedMonth;
-
-    const monthItems = historialState.items.filter((item) => item.fecha.startsWith(selectedMonth));
+    const selectedMonth = monthSelector?.value || historialState.selectedMonth || '';
+    
+    // Filtrar por mes
+    let filtered = historialState.items.filter((item) => item.fecha.startsWith(selectedMonth));
+    
+    // Agrupar clientes únicos
     const grouped = new Map();
-    monthItems.forEach((item) => {
+    filtered.forEach((item) => {
         const clientKey = String(item.cliente_id || `${item.cliente}|${item.telefono}`);
         const sortKey = `${item.fecha} ${item.hora_inicio}`;
         const current = grouped.get(clientKey) || {
@@ -1276,7 +1371,6 @@ function renderHistorial() {
             lastSortKey: sortKey,
             latest: item,
         };
-
         current.count += 1;
         if (sortKey >= current.lastSortKey) {
             current.lastSortKey = sortKey;
@@ -1284,29 +1378,120 @@ function renderHistorial() {
         }
         grouped.set(clientKey, current);
     });
+    
+    let rows = [...grouped.values()];
+    
+    // Aplicar búsqueda por nombre
+    if (historialState.searchQuery.trim()) {
+        const query = historialState.searchQuery.toLowerCase().trim();
+        rows = rows.filter((item) => item.cliente.toLowerCase().includes(query));
+    }
+    
+    // Aplicar ordenamiento
+    switch (historialState.sortBy) {
+        case 'alfabetico-asc':
+            rows.sort((a, b) => a.cliente.localeCompare(b.cliente));
+            break;
+        case 'alfabetico-desc':
+            rows.sort((a, b) => b.cliente.localeCompare(a.cliente));
+            break;
+        case 'frecuencia':
+            rows.sort((a, b) => b.count - a.count);
+            break;
+        case 'frecuencia-desc':
+            rows.sort((a, b) => a.count - b.count);
+            break;
+        case 'fecha-desc':
+        default:
+            rows.sort((a, b) => b.lastSortKey.localeCompare(a.lastSortKey));
+            break;
+    }
+    
+    historialState.allItems = rows;
+    return rows;
+}
 
-    const rows = [...grouped.values()].sort((a, b) => b.lastSortKey.localeCompare(a.lastSortKey));
-    const totalReservations = monthItems.length;
-    const uniqueClients = rows.length;
-    const latestRow = rows[0]?.latest || rows[0] || null;
+// Renderizar página actual (10 items según paginación)
+function renderHistorialPage() {
+    const cards = document.getElementById('dash-history-cards');
+    const list = document.getElementById('dash-history-list');
+    const monthSelector = document.getElementById('dash-history-month');
+    const historySelect = document.getElementById('dash-history-barbero');
+    
+    if (!cards || !list || !monthSelector) return;
+
+    if (!historialState.months.length) {
+        cards.innerHTML = '<p class="dash-history__empty">No hay información de historial todavía.</p>';
+        list.innerHTML = historyEmptyStateMarkup('Aún no hay historial disponible.', 'Cuando existan reservas, aparecerán aquí.');
+        return;
+    }
+
+    // Inicializar selectores si no están inicializados
+    if (!monthSelector.dataset.bound) {
+        monthSelector.innerHTML = historialState.months.map((item) => `<option value="${item.value}">${item.label}</option>`).join('');
+        monthSelector.value = historialState.selectedMonth || historialState.months[historialState.months.length - 1]?.value || '';
+        monthSelector.dataset.bound = '1';
+        monthSelector.addEventListener('change', () => {
+            historialState.selectedMonth = monthSelector.value;
+            historialState.visibleCount = 10;
+            historialState.items = [];
+            historialState.serverOffset = 0;
+            historialState.serverHasMore = false;
+            historialState.cacheKey = '';
+            loadHistorialData().catch((err) => console.error(err));
+        });
+    }
+
+    if (monthSelector.value !== historialState.selectedMonth) {
+        monthSelector.value = historialState.selectedMonth || monthSelector.value;
+    }
+
+    if (historySelect && !historySelect.dataset.bound) {
+        historySelect.addEventListener('change', () => {
+            historialState.selectedBarberoId = historySelect.value ? Number(historySelect.value) : null;
+            historialState.cacheKey = '';
+            historialState.items = [];
+            historialState.visibleCount = 10;
+            historialState.serverOffset = 0;
+            historialState.serverHasMore = false;
+            loadHistorialData().catch((err) => console.error(err));
+        });
+        historySelect.dataset.bound = '1';
+    }
+
+    // Aplicar filtros y obtener rows finales
+    const rows = applyHistorialFilters();
+    const activeMonth = monthSelector.value || historialState.selectedMonth || historialState.months[historialState.months.length - 1]?.value || '';
+    historialState.selectedMonth = activeMonth;
+    const totalReservations = historialState.items.filter((item) => item.fecha.startsWith(activeMonth)).length;
     const scopeLabel = IS_ADMIN && historySelect && historySelect.value
         ? `Barbero: ${historySelect.options[historySelect.selectedIndex]?.text || 'Barbero'}`
         : (IS_ADMIN ? 'Global' : 'Mis clientes');
 
+    // Actualizar KPI cards
     cards.innerHTML = `
-        <article class="dash-kpi-card"><h4>Clientes únicos</h4><p>${uniqueClients}</p></article>
+        <article class="dash-kpi-card"><h4>Clientes únicos</h4><p>${rows.length}</p></article>
         <article class="dash-kpi-card"><h4>Reservas del mes</h4><p>${totalReservations}</p></article>
         <article class="dash-kpi-card"><h4>Alcance</h4><p>${scopeLabel}</p></article>
-        <article class="dash-kpi-card"><h4>Última reserva</h4><p>${latestRow ? `${latestRow.fecha} ${latestRow.hora_inicio}` : '-'}</p></article>
     `;
 
+    // Paginar visualmente en cliente: mostrar 10 clientes por bloque de scroll
+    const paginatedRows = rows.slice(0, historialState.visibleCount);
+    historialState.hasMore = (rows.length > paginatedRows.length) || historialState.serverHasMore;
+
     if (!rows.length) {
-        list.innerHTML = '<p class="dash-history__empty">No hay clientes en este mes para el filtro seleccionado.</p>';
+        const hint = historialState.searchQuery.trim()
+            ? 'Prueba con otro nombre o limpia la búsqueda.'
+            : 'Cambia el mes o el barbero para ver resultados.';
+        list.innerHTML = historyEmptyStateMarkup('No hay clientes en este filtro.', hint);
         return;
     }
 
-    list.innerHTML = rows.map((item) => {
+    const itemsHtml = paginatedRows.map((item) => {
         const latest = item.latest || item;
+        const phoneDigits = normalizePhoneDigits(item.telefono_digits || item.telefono);
+        const callLink = buildCallLink(phoneDigits);
+        const whatsappLink = buildWhatsAppLink(phoneDigits);
         return `
             <article class="dash-history-item dash-history-item--client">
                 <div class="dash-history-item__avatar">${(item.cliente || 'C').trim().charAt(0).toUpperCase()}</div>
@@ -1316,18 +1501,129 @@ function renderHistorial() {
                     <span>${item.count} reserva${item.count === 1 ? '' : 's'} · Última: ${latest.fecha} ${latest.hora_inicio} · ${latest.servicio}</span>
                 </div>
                 <div class="dash-history-item__meta">
+                    <div class="dash-history-item__actions">
+                        ${createHistoryActionButton({ href: callLink, label: phoneDigits ? `Llamar a ${item.cliente}` : 'Teléfono no disponible', type: 'call', disabled: !callLink })}
+                        ${createHistoryActionButton({ href: whatsappLink, label: phoneDigits ? `Abrir WhatsApp con ${item.cliente}` : 'WhatsApp no disponible', type: 'message', disabled: !whatsappLink })}
+                    </div>
                     <span class="dash-history-item__status dash-history-item__status--${getStatusClass(latest.estado)}">${latest.estado}</span>
                     <small>${latest.barbero}</small>
                 </div>
             </article>
         `;
     }).join('');
+
+    list.innerHTML = itemsHtml;
+}
+
+function renderHistorial() {
+    renderHistorialPage();
+    initIntersectionObserver();
+    initHistorialSearch();
+    initHistorialSort();
+}
+
+// Inicializar Intersection Observer para scroll infinito
+function initIntersectionObserver() {
+    const sentinel = document.getElementById('hist-sentinel');
+    if (!sentinel || historialState.isLoading) return;
+
+    if (window.historialObserver) {
+        window.historialObserver.disconnect();
+    }
+
+    window.historialObserver = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !historialState.isLoading && historialState.hasMore) {
+            loadMoreHistorial();
+        }
+    }, { threshold: 0.1 });
+
+    window.historialObserver.observe(sentinel);
+}
+
+// Cargar más items (scroll infinito)
+async function loadMoreHistorial() {
+    if (historialState.isLoading || !historialState.hasMore) return;
+
+    const currentRows = applyHistorialFilters();
+    if (historialState.visibleCount < currentRows.length) {
+        historialState.visibleCount += 10;
+        renderHistorialPage();
+        return;
+    }
+
+    if (!historialState.serverHasMore) {
+        historialState.hasMore = false;
+        return;
+    }
+    
+    historialState.isLoading = true;
+    const loader = document.getElementById('hist-loading');
+    if (loader) loader.style.display = 'block';
+
+    try {
+        const historySelect = document.getElementById('dash-history-barbero');
+        const params = new URLSearchParams();
+        params.set('limit', String(historialState.limit));
+        params.set('offset', String(historialState.serverOffset + historialState.limit));
+
+        if (IS_ADMIN && historySelect && historySelect.value) {
+            params.set('barbero_id', historySelect.value);
+        }
+
+        const response = await fetch(`/api/historial?${params.toString()}`);
+        const data = await response.json();
+        
+        if (!response.ok) throw new Error(data.error || 'Error cargando más items');
+
+        // Agregar nuevos items sin perder los anteriores
+        historialState.items.push(...(data.items || []));
+    historialState.serverOffset = Number(data.offset || (historialState.serverOffset + historialState.limit));
+    historialState.serverHasMore = Boolean(data.has_more);
+    historialState.visibleCount += 10;
+        
+        renderHistorialPage();
+    } catch (err) {
+        console.error('Error al cargar más clientes:', err);
+    } finally {
+        historialState.isLoading = false;
+        if (loader) loader.style.display = 'none';
+    }
+}
+
+// Inicializar búsqueda en tiempo real
+function initHistorialSearch() {
+    const searchInput = document.getElementById('dash-history-search');
+    if (!searchInput || searchInput.dataset.bound) return;
+
+    searchInput.dataset.bound = '1';
+    const debouncedSearch = debounceSearch((e) => {
+        historialState.searchQuery = e.target.value;
+        historialState.visibleCount = 10;
+        renderHistorialPage();
+    });
+
+    searchInput.addEventListener('input', debouncedSearch);
+}
+
+// Inicializar ordenamiento
+function initHistorialSort() {
+    const sortSelect = document.getElementById('dash-history-sort');
+    if (!sortSelect || sortSelect.dataset.bound) return;
+
+    sortSelect.dataset.bound = '1';
+    sortSelect.addEventListener('change', (e) => {
+        historialState.sortBy = e.target.value;
+        historialState.visibleCount = 10;
+        renderHistorialPage();
+    });
 }
 
 async function loadHistorialData() {
     const historySelect = document.getElementById('dash-history-barbero');
     const params = new URLSearchParams();
     const previousMonth = historialState.selectedMonth;
+    params.set('limit', String(historialState.limit));
+    params.set('offset', '0');
 
     if (IS_ADMIN && historySelect && historySelect.value) {
         params.set('barbero_id', historySelect.value);
@@ -1342,7 +1638,7 @@ async function loadHistorialData() {
         return;
     }
 
-    const response = await fetch(`/api/historial${params.toString() ? `?${params.toString()}` : ''}`);
+    const response = await fetch(`/api/historial?${params.toString()}`);
     const data = await response.json();
     if (!response.ok) {
         throw new Error(data.error || 'No se pudo cargar el historial.');
@@ -1350,6 +1646,10 @@ async function loadHistorialData() {
 
     historialState.items = data.items || [];
     historialState.months = data.months || [];
+    historialState.total = data.total || 0;
+    historialState.serverHasMore = Boolean(data.has_more);
+    historialState.serverOffset = Number(data.offset || 0);
+    historialState.visibleCount = 10;
     historialState.selectedMonth = historialState.months.some((month) => month.value === previousMonth)
         ? previousMonth
         : (historialState.months[historialState.months.length - 1]?.value || '');

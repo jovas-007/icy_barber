@@ -816,10 +816,10 @@ def add_months(base_date, months_delta):
     return date(year, month, day)
 
 
-def build_historial_response(scope="global", barbero_id=None):
+def build_historial_response(scope="global", barbero_id=None, limit=10, offset=0):
     today = get_today_mx()
     current_month_start = date(today.year, today.month, 1)
-    months = [add_months(current_month_start, offset) for offset in (-2, -1, 0)]
+    months = [add_months(current_month_start, offset_months) for offset_months in (-2, -1, 0)]
     range_start = months[0]
     range_end = add_months(current_month_start, 1)
 
@@ -835,7 +835,16 @@ def build_historial_response(scope="global", barbero_id=None):
     if scope == "barbero" and barbero_id:
         query = query.filter(Cita.barbero_id == barbero_id)
 
-    rows = query.order_by(Cita.fecha.desc(), Cita.hora_inicio.desc(), Cita.id.desc()).all()
+    query = query.order_by(Cita.fecha.desc(), Cita.hora_inicio.desc(), Cita.id.desc())
+    
+    # Obtener total de registros antes de paginar
+    total = query.count()
+    
+    # Aplicar paginación
+    limit = max(1, min(limit, 100))  # Límite entre 1 y 100
+    offset = max(0, offset)
+    rows = query.offset(offset).limit(limit).all()
+    
     items = []
     month_names = {
         1: "Enero",
@@ -855,12 +864,15 @@ def build_historial_response(scope="global", barbero_id=None):
         cliente = cita.cliente
         barbero = cita.barbero
         servicio = cita.servicio
+        telefono = cliente.telefono if cliente else ""
+        telefono_digits = re.sub(r"\D", "", telefono or "")
         items.append(
             {
                 "id": cita.id,
                 "cliente_id": cita.cliente_id,
                 "cliente": f"{cliente.nombres} {cliente.apellidos}".strip() if cliente else "Cliente",
-                "telefono": cliente.telefono if cliente else "",
+                "telefono": telefono,
+                "telefono_digits": telefono_digits,
                 "email": cliente.email if cliente else "",
                 "barbero_id": cita.barbero_id,
                 "barbero": barbero.nombre if barbero else "Barbero",
@@ -881,6 +893,10 @@ def build_historial_response(scope="global", barbero_id=None):
             for month_start in months
         ],
         "items": items,
+        "total": total,
+        "has_more": (offset + limit) < total,
+        "limit": limit,
+        "offset": offset,
         "scope": scope,
         "barbero_id": barbero_id,
     }
@@ -2800,13 +2816,17 @@ def api_estadisticas_clientes():
 @app.route("/api/historial", methods=["GET"])
 @login_required
 def api_historial_clientes():
+    # Parámetros de paginación
+    limit = request.args.get("limit", default=10, type=int)
+    offset = request.args.get("offset", default=0, type=int)
+    
     if current_user.role == "admin":
         barbero_id = request.args.get("barbero_id", type=int)
         scope = "barbero" if barbero_id else "global"
-        return jsonify(build_historial_response(scope=scope, barbero_id=barbero_id))
+        return jsonify(build_historial_response(scope=scope, barbero_id=barbero_id, limit=limit, offset=offset))
 
     if current_user.role == "barbero":
-        return jsonify(build_historial_response(scope="barbero", barbero_id=current_user.barbero_id))
+        return jsonify(build_historial_response(scope="barbero", barbero_id=current_user.barbero_id, limit=limit, offset=offset))
 
     return jsonify({"error": "No tienes permisos para ver este historial."}), 403
 
