@@ -69,19 +69,28 @@ Una vez que el app arrancó correctamente la PRIMERA VEZ:
 3. Haz que trigger un nuevo deploy (o simplemente commit&push a GitHub)
 4. Esto evita que se recreen las tablas en redeploys posteriores
 
-### **PASO 7: Imágenes de Portfolio (IMPORTANTE)**
+### **PASO 7: Imágenes persistentes (Catálogo + Portafolio)**
 
-Tu app guarda imágenes en `static/img/portfolio` (filesystem local).
+Tu app guarda imágenes en:
 
-**En Railway esto es efímero**, se perderán en redeploy.
+- `static/img/uploads` (avatares + catálogo)
+- `static/img/portfolio` (portafolio global y por barbero)
 
-**Opciones:**
-- **Opción A (Temporal, para testing)**: No hacer nada, las imágenes se pierden en redeploy
-- **Opción B (Recomendado)**: Agregar Volume persistente en Railway
-  - En **Settings** del servicio → **Generate** un Volume (mínimo 1GB)
-  - Monta en `/app/static/img/portfolio`
-  - Las imágenes persistirán entre redeploys
-- **Opción C (Producción real)**: Usar S3 / Cloudinary / R2 - por ahora no lo configuramos
+**En Railway esto es efímero**, se perderán en redeploy si no hay volumen.
+
+Configuración recomendada (la de tu screenshot):
+
+1. Crear 1 volume en el servicio web
+2. Mount path: `/data/media`
+3. Agregar variable en Railway:
+   - `PERSISTENT_MEDIA_ROOT=/data/media`
+4. Hacer redeploy
+
+Notas importantes:
+
+- Railway permite **un solo volume por servicio**.
+- La app enlaza `uploads` y `portfolio` al volume, pero mantiene URLs públicas en `/static/img/...`.
+- Si las imágenes ya se perdieron en un deploy anterior, debes volver a subirlas (no se recuperan solas).
 
 ---
 
@@ -95,7 +104,9 @@ Tu app guarda imágenes en `static/img/portfolio` (filesystem local).
 - No es problema tuyo, Railway maneja el puerto automáticamente
 
 ### Imágenes no aparecen después de redeploy
-- Agrégales Volume persistente (Paso 8, Opción B)
+- Verifica que exista volume montado en `/data/media`
+- Verifica variable `PERSISTENT_MEDIA_ROOT=/data/media`
+- Re-sube imágenes faltantes desde dashboard (catálogo y portafolio)
 
 ### Logs muestran "Connection refused"
 - Espera a que MySQL esté totalmente listo (30-60 seg)
@@ -113,7 +124,7 @@ Tu app guarda imágenes en `static/img/portfolio` (filesystem local).
 | 4 | Primer deploy automático (o fuerza uno) |
 | 5 | Verificar que conexión a TiDB funcione en los logs |
 | 6 | Si todo OK, cambiar `AUTO_BOOTSTRAP_DB=false` |
-| 7 | (Opcional) Agregar Volume para imágenes persistentes |
+| 7 | Configurar volume en `/data/media` + `PERSISTENT_MEDIA_ROOT` |
 
 ---
 

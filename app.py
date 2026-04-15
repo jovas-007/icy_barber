@@ -3,6 +3,7 @@ import re
 import json
 import smtplib
 import ssl
+import shutil
 from calendar import monthrange
 from email.message import EmailMessage
 from html import escape as html_escape
@@ -89,9 +90,72 @@ RESEND_SMTP_USERNAME = os.getenv("RESEND_SMTP_USERNAME", "resend").strip() or "r
 RESEND_SMTP_FALLBACK_ENABLED = os.getenv("RESEND_SMTP_FALLBACK", "true").strip().lower() not in {"0", "false", "no", "off"}
 
 BASE_DIR = Path(__file__).resolve().parent
-AVATAR_UPLOAD_DIR = BASE_DIR / "static" / "img" / "uploads"
-PRODUCT_UPLOAD_DIR = BASE_DIR / "static" / "img" / "uploads"
-PORTFOLIO_UPLOAD_DIR = BASE_DIR / "static" / "img" / "portfolio"
+STATIC_IMG_DIR = BASE_DIR / "static" / "img"
+PERSISTENT_MEDIA_ROOT = os.getenv("PERSISTENT_MEDIA_ROOT", "").strip()
+
+
+def _copy_missing_media(source_dir, target_dir):
+    if not source_dir.exists() or not source_dir.is_dir():
+        return
+
+    for source_path in source_dir.iterdir():
+        target_path = target_dir / source_path.name
+        if target_path.exists():
+            continue
+
+        if source_path.is_dir():
+            shutil.copytree(source_path, target_path)
+        else:
+            shutil.copy2(source_path, target_path)
+
+
+def _link_media_dir(static_dir, persistent_dir):
+    persistent_dir.mkdir(parents=True, exist_ok=True)
+    static_dir.parent.mkdir(parents=True, exist_ok=True)
+
+    if static_dir.is_symlink():
+        try:
+            if static_dir.resolve() == persistent_dir.resolve():
+                return
+        except OSError:
+            pass
+        static_dir.unlink(missing_ok=True)
+
+    if static_dir.exists():
+        if static_dir.is_dir():
+            _copy_missing_media(static_dir, persistent_dir)
+            shutil.rmtree(static_dir)
+        else:
+            static_dir.unlink()
+
+    static_dir.symlink_to(persistent_dir, target_is_directory=True)
+
+
+def configure_media_dirs():
+    uploads_dir = STATIC_IMG_DIR / "uploads"
+    portfolio_dir = STATIC_IMG_DIR / "portfolio"
+
+    if not PERSISTENT_MEDIA_ROOT:
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        portfolio_dir.mkdir(parents=True, exist_ok=True)
+        return uploads_dir, uploads_dir, portfolio_dir
+
+    persistent_root = Path(PERSISTENT_MEDIA_ROOT)
+    persistent_uploads = persistent_root / "uploads"
+    persistent_portfolio = persistent_root / "portfolio"
+
+    try:
+        _link_media_dir(uploads_dir, persistent_uploads)
+        _link_media_dir(portfolio_dir, persistent_portfolio)
+    except OSError as exc:
+        app.logger.warning("No se pudo inicializar media persistente en %s: %s", persistent_root, exc)
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        portfolio_dir.mkdir(parents=True, exist_ok=True)
+
+    return uploads_dir, uploads_dir, portfolio_dir
+
+
+AVATAR_UPLOAD_DIR, PRODUCT_UPLOAD_DIR, PORTFOLIO_UPLOAD_DIR = configure_media_dirs()
 ALLOWED_AVATAR_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 ALLOWED_PRODUCT_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 ALLOWED_PORTFOLIO_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
