@@ -2248,6 +2248,7 @@ def api_admin_barberos_delete(barbero_id):
     if mode == "activate":
         barbero.activo = True
         HorarioBarbero.query.filter_by(barbero_id=barbero.id).update({"activo": True})
+        assign_barbero_to_active_servicios(barbero)
 
         user = User.query.filter_by(barbero_id=barbero.id).first()
         if user:
