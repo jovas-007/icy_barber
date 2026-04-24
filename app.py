@@ -2224,11 +2224,17 @@ def api_admin_barberos_delete(barbero_id):
     mode = request.args.get("mode", "deactivate").strip().lower()
 
     if mode == "delete":
-        has_citas = Cita.query.filter_by(barbero_id=barbero.id).first() is not None
-        if has_citas:
-            return jsonify({"error": "No se puede eliminar porque el barbero tiene citas. Puedes desactivarlo."}), 409
+        citas_eliminadas = Cita.query.filter_by(barbero_id=barbero.id).delete(synchronize_session=False)
 
-        HorarioBarbero.query.filter_by(barbero_id=barbero.id).delete()
+        HorarioBarbero.query.filter_by(barbero_id=barbero.id).delete(synchronize_session=False)
+        ExcepcionDisponibilidadBarbero.query.filter_by(barbero_id=barbero.id).delete(synchronize_session=False)
+
+        for item in PortfolioImagen.query.filter_by(barbero_id=barbero.id).all():
+            image_path = PORTFOLIO_UPLOAD_DIR / item.imagen
+            if item.imagen and image_path.exists() and image_path.is_file():
+                image_path.unlink(missing_ok=True)
+            db.session.delete(item)
+
         db.session.execute(servicio_barberos.delete().where(servicio_barberos.c.barbero_id == barbero.id))
 
         user = User.query.filter_by(barbero_id=barbero.id).first()
@@ -2237,7 +2243,18 @@ def api_admin_barberos_delete(barbero_id):
 
         db.session.delete(barbero)
         db.session.commit()
-        return jsonify({"message": "Barbero eliminado correctamente."})
+        return jsonify({"message": "Barbero eliminado correctamente.", "citas_eliminadas": int(citas_eliminadas)})
+
+    if mode == "activate":
+        barbero.activo = True
+        HorarioBarbero.query.filter_by(barbero_id=barbero.id).update({"activo": True})
+
+        user = User.query.filter_by(barbero_id=barbero.id).first()
+        if user:
+            user.activo = True
+
+        db.session.commit()
+        return jsonify({"message": "Barbero activado correctamente."})
 
     barbero.activo = False
     HorarioBarbero.query.filter_by(barbero_id=barbero.id).update({"activo": False})

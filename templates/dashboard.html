@@ -2334,7 +2334,10 @@ function setupAdminBarberos() {
             return;
         }
 
-        list.innerHTML = data.map(item => `
+        list.innerHTML = data.map(item => {
+            const toggleAction = item.activo ? 'deactivate' : 'activate';
+            const toggleLabel = item.activo ? 'Desactivar' : 'Activar';
+            return `
             <article class="admin-barbero-card ${item.activo ? '' : 'is-inactive'}">
                 <div>
                     <div class="admin-barbero-card__main">
@@ -2348,11 +2351,12 @@ function setupAdminBarberos() {
                 </div>
                 <div class="admin-barbero-card__actions">
                     <button type="button" data-action="edit" data-id="${item.id}">Editar</button>
-                    <button type="button" data-action="deactivate" data-id="${item.id}">Desactivar</button>
+                    <button type="button" data-action="${toggleAction}" data-id="${item.id}">${toggleLabel}</button>
                     <button type="button" data-action="remove" data-id="${item.id}">Eliminar</button>
                 </div>
             </article>
-        `).join('');
+        `;
+        }).join('');
 
         BARBEROS.splice(0, BARBEROS.length, ...data.filter(x => x.activo));
         renderTimeline();
@@ -2475,23 +2479,25 @@ function setupAdminBarberos() {
         const action = button.dataset.action;
         const barberoId = button.dataset.id;
 
-        if (action === 'deactivate') {
-            const approved = await openCenterConfirm('¿Desactivar este barbero?');
+        if (action === 'deactivate' || action === 'activate') {
+            const willActivate = action === 'activate';
+            const approved = await openCenterConfirm(willActivate ? '¿Activar este barbero?' : '¿Desactivar este barbero?');
             if (!approved) return;
-            const response = await fetch(`/api/admin/barberos/${barberoId}`, { method: 'DELETE' });
+            const modeParam = willActivate ? '?mode=activate' : '';
+            const response = await fetch(`/api/admin/barberos/${barberoId}${modeParam}`, { method: 'DELETE' });
             const data = await response.json();
             if (!response.ok) {
-                setMsg(data.error || 'No se pudo desactivar el barbero.', true);
+                setMsg(data.error || (willActivate ? 'No se pudo activar el barbero.' : 'No se pudo desactivar el barbero.'), true);
                 return;
             }
-            setMsg(data.message || 'Barbero desactivado.');
-            showCenterFeedback(data.message || 'Barbero desactivado correctamente.');
+            setMsg(data.message || (willActivate ? 'Barbero activado.' : 'Barbero desactivado.'));
+            showCenterFeedback(data.message || (willActivate ? 'Barbero activado correctamente.' : 'Barbero desactivado correctamente.'));
             await renderList();
             return;
         }
 
         if (action === 'remove') {
-            const approved = await openCenterConfirm('¿Eliminar permanentemente este barbero? Esta acción no se puede deshacer.');
+            const approved = await openCenterConfirm('¿Eliminar permanentemente este barbero? También se eliminarán sus citas e historial. Esta acción no se puede deshacer.');
             if (!approved) return;
             const response = await fetch(`/api/admin/barberos/${barberoId}?mode=delete`, { method: 'DELETE' });
             const data = await response.json();
